@@ -5,17 +5,17 @@ import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
 
 const LANGS = [
-  { code: 'ko', label: '한국어' },
-  { code: 'en', label: 'EN' },
-  { code: 'ja', label: '日本語' },
-  { code: 'zh', label: '中文' },
-  { code: 'hi', label: 'हिन्दी' },
-  { code: 'es', label: 'Español' },
-  { code: 'fr', label: 'Français' },
-  { code: 'ar', label: 'العربية' },
-  { code: 'id', label: 'Indonesia' },
-  { code: 'vi', label: 'Tiếng Việt' },
-  { code: 'pt', label: 'Português' },
+  { code: 'ko', label: '한국어', flag: '🇰🇷' },
+  { code: 'en', label: 'EN', flag: '🇺🇸' },
+  { code: 'ja', label: '日本語', flag: '🇯🇵' },
+  { code: 'zh', label: '中文', flag: '🇨🇳' },
+  { code: 'hi', label: 'हिन्दी', flag: '🇮🇳' },
+  { code: 'es', label: 'Español', flag: '🇪🇸' },
+  { code: 'fr', label: 'Français', flag: '🇫🇷' },
+  { code: 'ar', label: 'العربية', flag: '🇸🇦' },
+  { code: 'id', label: 'Indonesia', flag: '🇮🇩' },
+  { code: 'vi', label: 'Tiếng Việt', flag: '🇻🇳' },
+  { code: 'pt', label: 'Português', flag: '🇧🇷' },
 ];
 
 export default function Header() {
@@ -55,7 +55,7 @@ export default function Header() {
             onClick={() => setOpen((v) => !v)}
             className="flex items-center gap-1.5 text-[12px] font-mono font-bold px-4 py-2 rounded-full border-2 border-gochujang text-gochujang hover:bg-gochujang hover:text-paper transition"
           >
-            <span aria-hidden>🌐</span>
+            <span aria-hidden>{current.flag}</span>
             {current.label}
             <span aria-hidden>▾</span>
           </button>
@@ -67,12 +67,13 @@ export default function Header() {
                   key={l.code}
                   href={`/${l.code}`}
                   onClick={() => setOpen(false)}
-                  className={`block text-[12px] font-mono px-3 py-1.5 transition ${
+                  className={`flex items-center gap-2 text-[12px] font-mono px-3 py-1.5 transition ${
                     l.code === locale
                       ? 'bg-ink text-paper'
                       : 'opacity-70 hover:opacity-100 hover:bg-ink/5'
                   }`}
                 >
+                  <span aria-hidden>{l.flag}</span>
                   {l.label}
                 </Link>
               ))}

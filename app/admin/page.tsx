@@ -17,6 +17,7 @@ type ArticleRow = {
 export default function AdminDashboard() {
   const [articles, setArticles] = useState<ArticleRow[] | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch('/api/admin/articles');
@@ -35,6 +36,25 @@ export default function AdminDashboard() {
       body: JSON.stringify({ status: 'published' }),
     });
     load();
+  }
+
+  async function regenerateImage(
+    articleId: string,
+    target: 'hero' | 'body',
+    blockIndex?: number
+  ) {
+    const key = `${articleId}-${target}-${blockIndex ?? ''}`;
+    setRegenerating(key);
+    try {
+      await fetch(`/api/admin/articles/${articleId}/regenerate-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, blockIndex }),
+      });
+      await load();
+    } finally {
+      setRegenerating(null);
+    }
   }
 
   return (
@@ -111,11 +131,20 @@ export default function AdminDashboard() {
               {isOpen && ko && (
                 <div className="border-t border-black/10 p-6 bg-white/40">
                   {a.image_url && (
-                    <img
-                      src={a.image_url}
-                      alt=""
-                      className="w-full h-48 object-cover rounded mb-5"
-                    />
+                    <div className="relative mb-5">
+                      <img
+                        src={a.image_url}
+                        alt=""
+                        className="w-full h-48 object-cover rounded"
+                      />
+                      <button
+                        onClick={() => regenerateImage(a.id, 'hero')}
+                        disabled={regenerating === `${a.id}-hero-`}
+                        className="absolute top-2 right-2 text-[10px] font-mono bg-black/70 text-white rounded-full px-3 py-1 hover:bg-black transition disabled:opacity-50"
+                      >
+                        {regenerating === `${a.id}-hero-` ? '변경 중…' : '새 사진'}
+                      </button>
+                    </div>
                   )}
                   <p className="text-xs opacity-50 mb-4">{ko.excerpt}</p>
                   {ko.body?.map((block, i) =>
@@ -124,12 +153,20 @@ export default function AdminDashboard() {
                         {block.h}
                       </h4>
                     ) : block.img ? (
-                      <img
-                        key={i}
-                        src={block.img}
-                        alt=""
-                        className="w-full h-40 object-cover rounded my-3"
-                      />
+                      <div key={i} className="relative my-3">
+                        <img
+                          src={block.img}
+                          alt=""
+                          className="w-full h-40 object-cover rounded"
+                        />
+                        <button
+                          onClick={() => regenerateImage(a.id, 'body', i)}
+                          disabled={regenerating === `${a.id}-body-${i}`}
+                          className="absolute top-2 right-2 text-[10px] font-mono bg-black/70 text-white rounded-full px-3 py-1 hover:bg-black transition disabled:opacity-50"
+                        >
+                          {regenerating === `${a.id}-body-${i}` ? '변경 중…' : '새 사진'}
+                        </button>
+                      </div>
                     ) : (
                       <p key={i} className="text-sm opacity-90 mb-2">
                         {block.p}
