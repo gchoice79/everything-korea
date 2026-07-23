@@ -34,6 +34,9 @@ export async function generateMetadata({
       locale: params.locale,
       type: 'website',
     },
+    verification: {
+      google: 'rwQlYip3z3-w9ax3MBFvGLL9iD0IMqRr7rkrHwoDeOc',
+    },
   };
 }
 
