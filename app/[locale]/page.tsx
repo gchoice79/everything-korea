@@ -1,9 +1,6 @@
-'use client';
-
-import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useTranslations, useLocale } from 'next-intl';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import VisitStats from '@/components/VisitStats';
 
 type CategoryCard = {
   id: string;
@@ -12,112 +9,76 @@ type CategoryCard = {
   articles: string[];
 };
 
-export default function Home() {
-  const t = useTranslations();
-  const locale = useLocale();
-  const [categories, setCategories] = useState<CategoryCard[] | null>(null);
-  const [stats, setStats] = useState<{ today: number; total: number } | null>(null);
-  const trackedRef = useRef(false);
+type Params = { locale: string };
 
-  useEffect(() => {
-    if (trackedRef.current) return;
-    trackedRef.current = true;
-    fetch('/api/track-visit', { method: 'POST' })
-      .then((r) => r.json())
-      .then((d) => setStats({ today: d.today, total: d.total }))
-      .catch(() => {});
-  }, []);
+async function loadCategories(locale: string): Promise<CategoryCard[]> {
+  const { data: cats } = await supabaseAdmin
+    .from('categories')
+    .select('id, is_live, sort_order')
+    .order('sort_order');
 
-  useEffect(() => {
-    let cancelled = false;
+  if (!cats) return [];
 
-    async function load() {
-      // 1) 카테고리 목록
-      const { data: cats } = await supabase
-        .from('categories')
-        .select('id, is_live, sort_order')
-        .order('sort_order');
+  const { data: names } = await supabaseAdmin
+    .from('category_names')
+    .select('category_id, lang, name')
+    .in('category_id', cats.map((c) => c.id));
 
-      if (!cats) return;
+  const nameFor = (categoryId: string) =>
+    names?.find((n) => n.category_id === categoryId && n.lang === locale)?.name ??
+    names?.find((n) => n.category_id === categoryId && n.lang === 'en')?.name ??
+    categoryId;
 
-      // 2) 카테고리 이름 (현재 언어, 없으면 영어로 대체)
-      const { data: names } = await supabase
-        .from('category_names')
-        .select('category_id, lang, name')
-        .in('category_id', cats.map((c) => c.id));
+  const result: CategoryCard[] = [];
+  for (const c of cats) {
+    let articleTitles: string[] = [];
+    if (c.is_live) {
+      const { data: articles } = await supabaseAdmin
+        .from('articles')
+        .select('id')
+        .eq('category_id', c.id)
+        .eq('status', 'published')
+        .order('views', { ascending: false })
+        .limit(3);
 
-      const nameFor = (categoryId: string) =>
-        names?.find((n) => n.category_id === categoryId && n.lang === locale)?.name ??
-        names?.find((n) => n.category_id === categoryId && n.lang === 'en')?.name ??
-        categoryId;
+      if (articles && articles.length) {
+        const { data: translations } = await supabaseAdmin
+          .from('article_translations')
+          .select('article_id, lang, title')
+          .in('article_id', articles.map((a) => a.id));
 
-      // 3) 각 카테고리의 인기글(상위 3개) 제목
-      const result: CategoryCard[] = [];
-      for (const c of cats) {
-        let articleTitles: string[] = [];
-        if (c.is_live) {
-          const { data: articles } = await supabase
-            .from('articles')
-            .select('id')
-            .eq('category_id', c.id)
-            .eq('status', 'published')
-            .order('views', { ascending: false })
-            .limit(3);
-
-          if (articles && articles.length) {
-            const { data: translations } = await supabase
-              .from('article_translations')
-              .select('article_id, lang, title')
-              .in('article_id', articles.map((a) => a.id));
-
-            articleTitles = articles.map((a) => {
-              const t =
-                translations?.find((tr) => tr.article_id === a.id && tr.lang === locale) ??
-                translations?.find((tr) => tr.article_id === a.id && tr.lang === 'en');
-              return t?.title ?? '';
-            });
-          }
-        }
-
-        result.push({
-          id: c.id,
-          live: c.is_live,
-          name: nameFor(c.id),
-          articles: articleTitles,
+        articleTitles = articles.map((a) => {
+          const t =
+            translations?.find((tr) => tr.article_id === a.id && tr.lang === locale) ??
+            translations?.find((tr) => tr.article_id === a.id && tr.lang === 'en');
+          return t?.title ?? '';
         });
       }
-
-      if (!cancelled) setCategories(result);
     }
 
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [locale]);
+    result.push({ id: c.id, live: c.is_live, name: nameFor(c.id), articles: articleTitles });
+  }
+
+  return result;
+}
+
+export default async function Home({ params }: { params: Params }) {
+  const categories = await loadCategories(params.locale);
+  const messages = (await import(`../../messages/${params.locale}.json`)).default;
 
   return (
     <main className="max-w-[1080px] mx-auto px-7">
       <section className="py-20 border-b border-ink/10">
         <div className="flex items-center gap-2 text-xs tracking-[.16em] uppercase text-indigo mb-4">
           <span className="w-1.5 h-1.5 rounded-full bg-gochujang inline-block" />
-          {t('home.eyebrow')}
+          {messages.home.eyebrow}
         </div>
         <h1 className="font-bold text-5xl md:text-6xl leading-tight max-w-2xl">
-          {t('home.title')}
+          {messages.home.title}
         </h1>
-        <p className="mt-5 max-w-md opacity-75">{t('home.desc')}</p>
+        <p className="mt-5 max-w-md opacity-75">{messages.home.desc}</p>
 
-        {stats && (
-          <div className="mt-6 flex gap-5 text-xs font-mono opacity-60">
-            <span>
-              {t('stats.today')} {stats.today.toLocaleString()}
-            </span>
-            <span>
-              {t('stats.total')} {stats.total.toLocaleString()}
-            </span>
-          </div>
-        )}
+        <VisitStats todayLabel={messages.stats.today} totalLabel={messages.stats.total} />
       </section>
 
       <div className="my-9 h-[90px] border border-dashed border-ink/15 rounded flex items-center justify-center text-[10px] tracking-widest uppercase text-ink/40">
@@ -125,15 +86,12 @@ export default function Home() {
       </div>
 
       <div className="flex items-center gap-3 my-10 text-xs tracking-widest uppercase opacity-55">
-        {t('home.sectionLabel')}
+        {messages.home.sectionLabel}
         <span className="flex-1 h-px bg-ink/10" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-16">
-        {categories === null && (
-          <div className="text-sm opacity-50 font-mono">Loading…</div>
-        )}
-        {categories?.map((c, i) => {
+        {categories.map((c, i) => {
           const CardInner = (
             <>
               <span className="text-[10px] font-mono opacity-50">
@@ -144,7 +102,7 @@ export default function Home() {
                   c.live ? 'text-celadon border-celadon' : 'border-ink/10'
                 }`}
               >
-                {c.live ? t('category.live') : t('category.soon')}
+                {c.live ? messages.category.live : messages.category.soon}
               </span>
               <h3 className="font-serif text-lg mt-4">{c.name}</h3>
               {c.articles.length ? (
@@ -160,7 +118,7 @@ export default function Home() {
                 </ul>
               ) : (
                 <div className="mt-3 pt-3 border-t border-ink/10 text-[11px] font-mono opacity-40">
-                  {t('category.noArticles')}
+                  {messages.category.noArticles}
                 </div>
               )}
             </>
@@ -173,7 +131,7 @@ export default function Home() {
           }`;
 
           return c.live ? (
-            <Link key={c.id} href={`/${locale}/${c.id}`} className={cardClass}>
+            <Link key={c.id} href={`/${params.locale}/${c.id}`} className={cardClass}>
               {CardInner}
             </Link>
           ) : (

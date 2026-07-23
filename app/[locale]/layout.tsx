@@ -8,10 +8,34 @@ export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
 }
 
-export const metadata: Metadata = {
-  title: 'Everything Korea',
-  description: 'Everything about Korea, in 15 languages.',
-};
+const BASE_URL = 'https://everything-korea.vercel.app';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { locale: Locale };
+}): Promise<Metadata> {
+  const messages = (await import(`../../messages/${params.locale}.json`)).default;
+
+  const languages: Record<string, string> = {};
+  for (const l of locales) languages[l] = `/${l}`;
+
+  return {
+    metadataBase: new URL(BASE_URL),
+    title: { default: messages.brand.name, template: `%s — ${messages.brand.name}` },
+    description: messages.home.desc,
+    alternates: {
+      canonical: `/${params.locale}`,
+      languages,
+    },
+    openGraph: {
+      title: messages.brand.name,
+      description: messages.home.desc,
+      locale: params.locale,
+      type: 'website',
+    },
+  };
+}
 
 export default async function LocaleLayout({
   children,

@@ -66,6 +66,75 @@ async function translateBlock(
   return block;
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+export async function suggestTopic(
+  category: string
+): Promise<{ ok: boolean; topic?: string; slug?: string; error?: string }> {
+  try {
+    const { data: categoryNameRow } = await supabaseAdmin
+      .from('category_names')
+      .select('name')
+      .eq('category_id', category)
+      .eq('lang', 'ko')
+      .maybeSingle();
+    const categoryName = categoryNameRow?.name ?? category;
+
+    const { data: existing } = await supabaseAdmin
+      .from('articles')
+      .select('id, slug')
+      .eq('category_id', category);
+
+    let existingTopics = '';
+    if (existing && existing.length) {
+      const { data: titles } = await supabaseAdmin
+        .from('article_translations')
+        .select('article_id, title')
+        .eq('lang', 'ko')
+        .in('article_id', existing.map((a) => a.id));
+
+      existingTopics = existing
+        .map((a) => titles?.find((t) => t.article_id === a.id)?.title ?? a.slug)
+        .join(', ');
+    }
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const res = await anthropic.messages.create({
+      model: 'claude-sonnet-5',
+      max_tokens: 300,
+      messages: [
+        {
+          role: 'user',
+          content: `"Everything Korea"라는 한국 정보 사이트의 "${categoryName}" 카테고리에 새 글 주제를 하나 추천해줘.
+
+이미 다룬 주제: ${existingTopics || '(아직 없음)'}
+
+위 목록과 겹치지 않는, 대중적으로 관심이 있을 만한 새로운 주제 하나를 골라줘. 영문 slug(소문자, 하이픈)도 함께 만들어줘. 다른 설명 없이 아래 JSON 형식으로만 답해줘:
+
+{"topic": "한국어 주제", "slug": "english-slug"}`,
+        },
+      ],
+    });
+
+    const textBlock = res.content.find(
+      (b): b is { type: 'text'; text: string } => b.type === 'text'
+    );
+    if (!textBlock) return { ok: false, error: 'Claude 응답을 받지 못했습니다.' };
+
+    const cleaned = textBlock.text.trim().replace(/^```json\s*|\s*```$/g, '');
+    const parsed = JSON.parse(cleaned) as { topic: string; slug: string };
+    return { ok: true, topic: parsed.topic, slug: slugify(parsed.slug) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '알 수 없는 오류';
+    return { ok: false, error: message };
+  }
+}
+
 export async function generateArticle({
   topic,
   slug,

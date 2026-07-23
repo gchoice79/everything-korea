@@ -8,6 +8,7 @@ export default function NewArticle() {
   const [slug, setSlug] = useState('');
   const [category, setCategory] = useState('food');
   const [loading, setLoading] = useState(false);
+  const [autoLoading, setAutoLoading] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -27,6 +28,28 @@ export default function NewArticle() {
       setResult({ ok: true, message: `"${data.title}" 작성 완료 — 검토 대기열에 추가됐습니다.` });
       setTopic('');
       setSlug('');
+    } else {
+      setResult({ ok: false, message: data.error ?? '알 수 없는 오류가 발생했습니다.' });
+    }
+  }
+
+  async function handleAutoGenerate() {
+    setAutoLoading(true);
+    setResult(null);
+
+    const res = await fetch('/api/admin/generate-auto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category }),
+    });
+    const data = await res.json();
+
+    setAutoLoading(false);
+    if (res.ok) {
+      setResult({
+        ok: true,
+        message: `주제 자동 선택: "${data.topic}" → "${data.title}" 작성 완료 — 검토 대기열에 추가됐습니다.`,
+      });
     } else {
       setResult({ ok: false, message: data.error ?? '알 수 없는 오류가 발생했습니다.' });
     }
@@ -77,18 +100,34 @@ export default function NewArticle() {
             className="w-full border border-black/15 rounded px-3 py-2 bg-[#F1EDE1]"
           >
             <option value="food">한국 음식</option>
-            <option value="culture">전통문화 (준비중)</option>
+            <option value="culture">전통문화</option>
           </select>
         </div>
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || autoLoading}
           className="w-full bg-black text-[#F1EDE1] rounded py-3 text-sm disabled:opacity-40"
         >
           {loading ? '작성 중… (30초 정도 걸릴 수 있어요)' : '생성하기'}
         </button>
       </form>
+
+      <div className="flex items-center gap-3 my-6 text-xs opacity-40">
+        <span className="flex-1 h-px bg-black/10" />
+        또는
+        <span className="flex-1 h-px bg-black/10" />
+      </div>
+
+      <button
+        onClick={handleAutoGenerate}
+        disabled={loading || autoLoading}
+        className="w-full border border-black/20 rounded py-3 text-sm hover:bg-black hover:text-[#F1EDE1] transition disabled:opacity-40"
+      >
+        {autoLoading
+          ? '주제 자동 선택 후 작성 중… (30초 정도 걸릴 수 있어요)'
+          : `"${category === 'food' ? '한국 음식' : '전통문화'}" 카테고리에서 주제 자동 선택해서 생성하기`}
+      </button>
 
       {result && (
         <div

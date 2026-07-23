@@ -1,10 +1,10 @@
-'use client';
-
-import { useEffect, useState, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { cache } from 'react';
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { useLocale } from 'next-intl';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import { locales } from '@/i18n/routing';
+import ViewTracker from '@/components/ViewTracker';
 
 type Block = { h?: string; p?: string; img?: string };
 
@@ -36,86 +36,85 @@ const FALLBACK_NOTE: Record<string, string> = {
   pt: 'A tradução completa deste artigo ainda não está pronta, por isso mostramos o original em inglês.',
 };
 
-export default function ArticlePage() {
-  const params = useParams<{ category: string; slug: string }>();
-  const locale = useLocale();
-  const [title, setTitle] = useState<string | null>(null);
-  const [body, setBody] = useState<Block[]>([]);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [views, setViews] = useState<number | null>(null);
-  const [isFallback, setIsFallback] = useState(false);
-  const trackedIdRef = useRef<string | null>(null);
+type Params = { locale: string; category: string; slug: string };
 
-  useEffect(() => {
-    let cancelled = false;
+const getArticle = cache(async (category: string, slug: string) => {
+  const { data: article } = await supabaseAdmin
+    .from('articles')
+    .select('id, image_url, views')
+    .eq('category_id', category)
+    .eq('slug', slug)
+    .eq('status', 'published')
+    .maybeSingle();
+  if (!article) return null;
 
-    async function load() {
-      const { data: article } = await supabase
-        .from('articles')
-        .select('id, image_url, views')
-        .eq('category_id', params.category)
-        .eq('slug', params.slug)
-        .single();
+  const { data: translations } = await supabaseAdmin
+    .from('article_translations')
+    .select('lang, title, excerpt, body')
+    .eq('article_id', article.id);
 
-      if (!article) return;
+  return { article, translations: translations ?? [] };
+});
 
-      // 조회수 기록 (같은 글은 한 번만, StrictMode 이중 실행 방지)
-      if (trackedIdRef.current !== article.id) {
-        trackedIdRef.current = article.id;
-        fetch('/api/track-view', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ articleId: article.id }),
-        }).catch(() => {});
-      }
+function pickTranslation(
+  translations: { lang: string; title: string; excerpt: string; body: unknown }[],
+  locale: string
+) {
+  const tr = translations.find((t) => t.lang === locale && t.body);
+  if (tr) return { tr, fallback: false };
+  return { tr: translations.find((t) => t.lang === 'en' && t.body), fallback: true };
+}
 
-      const { data: translations } = await supabase
-        .from('article_translations')
-        .select('lang, title, body')
-        .eq('article_id', article.id);
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const data = await getArticle(params.category, params.slug);
+  if (!data) return {};
 
-      let tr = translations?.find((t) => t.lang === locale && t.body);
-      let fallback = false;
-      if (!tr) {
-        tr = translations?.find((t) => t.lang === 'en' && t.body);
-        fallback = true;
-      }
+  const { tr } = pickTranslation(data.translations, params.locale);
+  const languages: Record<string, string> = {};
+  for (const l of locales) languages[l] = `/${l}/${params.category}/${params.slug}`;
 
-      if (!cancelled) {
-        setTitle(tr?.title ?? params.slug);
-        setBody((tr?.body as Block[]) ?? []);
-        setImageUrl(article.image_url ?? null);
-        setViews((article.views ?? 0) + 1);
-        setIsFallback(fallback);
-      }
-    }
+  return {
+    title: tr?.title ?? params.slug,
+    description: tr?.excerpt,
+    alternates: {
+      canonical: `/${params.locale}/${params.category}/${params.slug}`,
+      languages,
+    },
+    openGraph: {
+      title: tr?.title ?? params.slug,
+      description: tr?.excerpt,
+      images: data.article.image_url ? [data.article.image_url] : undefined,
+      type: 'article',
+    },
+  };
+}
 
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [params.category, params.slug, locale]);
+export default async function ArticlePage({ params }: { params: Params }) {
+  const data = await getArticle(params.category, params.slug);
+  if (!data) notFound();
+
+  const { tr, fallback } = pickTranslation(data.translations, params.locale);
+  const title = tr?.title ?? params.slug;
+  const body = (tr?.body as Block[]) ?? [];
 
   return (
     <main className="max-w-[720px] mx-auto px-7 py-14">
       <Link
-        href={`/${locale}/${params.category}`}
+        href={`/${params.locale}/${params.category}`}
         className="text-xs font-mono text-indigo inline-block mb-8"
       >
-        {BACK_LABEL[locale] ?? BACK_LABEL.en}
+        {BACK_LABEL[params.locale] ?? BACK_LABEL.en}
       </Link>
 
-      <h1 className="font-serif text-3xl md:text-4xl mb-2 leading-tight">
-        {title ?? '···'}
-      </h1>
+      <h1 className="font-serif text-3xl md:text-4xl mb-2 leading-tight">{title}</h1>
 
-      {views !== null && (
-        <p className="text-xs font-mono opacity-40 mb-6">조회 {views.toLocaleString()}회</p>
-      )}
+      <p className="text-xs font-mono opacity-40 mb-6">
+        조회 {(data.article.views ?? 0).toLocaleString()}회
+      </p>
 
-      {imageUrl && (
+      {data.article.image_url && (
         <img
-          src={imageUrl}
+          src={data.article.image_url}
           alt=""
           className="w-full h-64 md:h-80 object-cover rounded-md mb-8"
         />
@@ -142,11 +141,13 @@ export default function ArticlePage() {
         )}
       </div>
 
-      {isFallback && FALLBACK_NOTE[locale] && (
+      {fallback && FALLBACK_NOTE[params.locale] && (
         <div className="mt-10 p-4 border-l-2 border-mustard bg-mustard/10 text-sm">
-          {FALLBACK_NOTE[locale]}
+          {FALLBACK_NOTE[params.locale]}
         </div>
       )}
+
+      <ViewTracker articleId={data.article.id} />
     </main>
   );
 }
