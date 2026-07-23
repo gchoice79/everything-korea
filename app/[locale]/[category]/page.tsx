@@ -34,7 +34,7 @@ export default function CategoryPage() {
         .select('id, slug')
         .eq('category_id', params.category)
         .eq('status', 'published')
-        .order('sort_order');
+        .order('created_at', { ascending: false });
 
       let cards: ArticleCard[] = [];
       if (arts && arts.length) {
