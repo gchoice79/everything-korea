@@ -11,6 +11,8 @@ type CategoryCard = {
 
 type Params = { locale: string };
 
+export const dynamic = 'force-dynamic';
+
 async function loadCategories(locale: string): Promise<CategoryCard[]> {
   const { data: cats } = await supabaseAdmin
     .from('categories')
