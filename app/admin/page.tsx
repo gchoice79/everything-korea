@@ -43,6 +43,12 @@ export default function AdminDashboard() {
         <h1 className="font-serif text-3xl">검토 대기열</h1>
         <div className="flex gap-2">
           <Link
+            href="/admin/chat"
+            className="text-xs font-mono border border-black/20 rounded-full px-4 py-2 hover:bg-black/5 transition"
+          >
+            AI 채팅
+          </Link>
+          <Link
             href="/admin/settings"
             className="text-xs font-mono border border-black/20 rounded-full px-4 py-2 hover:bg-black/5 transition"
           >
