@@ -108,19 +108,15 @@ export async function POST(req: NextRequest) {
     };
 
     const resolvedBody: Block[] = [];
-    let heroImageUrl: string | null = null;
     for (const block of draft.body) {
       if (block.imgQuery) {
         const url = await fetchImageUrl(block.imgQuery);
-        if (url) {
-          if (!heroImageUrl) heroImageUrl = url;
-          resolvedBody.push({ img: url });
-        }
+        if (url) resolvedBody.push({ img: url });
         continue;
       }
       resolvedBody.push(block);
     }
-    if (!heroImageUrl) heroImageUrl = await fetchImageUrl(topic);
+    const heroImageUrl = await fetchImageUrl(`${topic} dish`);
 
     const { data: article, error } = await supabaseAdmin
       .from('articles')
