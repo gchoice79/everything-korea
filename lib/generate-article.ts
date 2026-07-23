@@ -34,19 +34,35 @@ const PRIORITY_LANGS = [
 
 type Block = { h?: string; p?: string; img?: string };
 
+async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** i));
+    }
+  }
+  throw lastErr;
+}
+
+async function translateText(
+  text: string,
+  translator: deepl.Translator,
+  targetLang: deepl.TargetLanguageCode
+): Promise<string> {
+  const r = await withRetry(() => translator.translateText(text, 'ko', targetLang));
+  return r.text;
+}
+
 async function translateBlock(
   block: Block,
   translator: deepl.Translator,
   targetLang: deepl.TargetLanguageCode
 ): Promise<Block> {
-  if (block.h) {
-    const r = await translator.translateText(block.h, 'ko', targetLang);
-    return { h: r.text };
-  }
-  if (block.p) {
-    const r = await translator.translateText(block.p, 'ko', targetLang);
-    return { p: r.text };
-  }
+  if (block.h) return { h: await translateText(block.h, translator, targetLang) };
+  if (block.p) return { p: await translateText(block.p, translator, targetLang) };
   return block;
 }
 
@@ -58,7 +74,13 @@ export async function generateArticle({
   topic: string;
   slug: string;
   category: string;
-}): Promise<{ ok: boolean; title?: string; articleId?: string; error?: string }> {
+}): Promise<{
+  ok: boolean;
+  title?: string;
+  articleId?: string;
+  error?: string;
+  failedLangs?: string[];
+}> {
   const sectionCount = 6;
   const imageCount = 4;
 
@@ -138,24 +160,34 @@ export async function generateArticle({
       is_machine_translated: false,
     });
 
+    const failedLangs: string[] = [];
     for (const { code, deepl: deeplCode } of PRIORITY_LANGS) {
-      const title = (await translator.translateText(draft.title, 'ko', deeplCode)).text;
-      const excerpt = (await translator.translateText(draft.excerpt, 'ko', deeplCode)).text;
-      const body = await Promise.all(
-        resolvedBody.map((b) => translateBlock(b, translator, deeplCode))
-      );
+      try {
+        const title = await translateText(draft.title, translator, deeplCode);
+        const excerpt = await translateText(draft.excerpt, translator, deeplCode);
+        const body = await Promise.all(
+          resolvedBody.map((b) => translateBlock(b, translator, deeplCode))
+        );
 
-      await supabaseAdmin.from('article_translations').insert({
-        article_id: article.id,
-        lang: code,
-        title,
-        excerpt,
-        body,
-        is_machine_translated: true,
-      });
+        await supabaseAdmin.from('article_translations').insert({
+          article_id: article.id,
+          lang: code,
+          title,
+          excerpt,
+          body,
+          is_machine_translated: true,
+        });
+      } catch {
+        failedLangs.push(code);
+      }
     }
 
-    return { ok: true, title: draft.title, articleId: article.id };
+    return {
+      ok: true,
+      title: draft.title,
+      articleId: article.id,
+      ...(failedLangs.length ? { failedLangs } : {}),
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류';
     return { ok: false, error: message };
