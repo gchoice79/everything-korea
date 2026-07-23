@@ -9,6 +9,12 @@ const LANGS = [
   { code: 'ja', label: '日本語' },
   { code: 'zh', label: '中文' },
   { code: 'hi', label: 'हिन्दी' },
+  { code: 'es', label: 'Español' },
+  { code: 'fr', label: 'Français' },
+  { code: 'ar', label: 'العربية' },
+  { code: 'id', label: 'Indonesia' },
+  { code: 'vi', label: 'Tiếng Việt' },
+  { code: 'pt', label: 'Português' },
 ];
 
 export default function Header() {
@@ -44,7 +50,7 @@ export default function Header() {
             </Link>
           ))}
           <span className="hidden sm:inline text-[11px] font-mono opacity-40 px-1 self-center shrink-0">
-            +10
+            +4
           </span>
         </div>
       </div>

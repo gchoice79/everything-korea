@@ -1,5 +1,8 @@
 {
-  "brand": { "name": "Everything Korea", "tagline": "कोरिया के बारे में सब कुछ" },
+  "brand": {
+    "name": "Everything Korea",
+    "tagline": "कोरिया के बारे में सब कुछ"
+  },
   "home": {
     "eyebrow": "बहुभाषी कोरिया विश्वकोश",
     "title": "कोरिया, आपकी भाषा में।",
@@ -7,9 +10,17 @@
     "sectionLabel": "श्रेणियाँ",
     "allCategories": "सभी श्रेणियाँ"
   },
-  "category": { "live": "लाइव", "soon": "जल्द आ रहा है", "noArticles": "पहले लेख जल्द आ रहे हैं" },
+  "category": {
+    "live": "लाइव",
+    "soon": "जल्द आ रहा है",
+    "noArticles": "पहले लेख जल्द आ रहे हैं"
+  },
   "footer": {
     "left": "Everything Korea — प्रोटोटाइप से लाइव साइट में बदल रहा है",
     "right": "hreflang / sitemap / ads.txt डिप्लॉय पर जोड़े जाएंगे"
+  },
+  "stats": {
+    "today": "आज के आगंतुक",
+    "total": "कुल आगंतुक"
   }
 }

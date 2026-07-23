@@ -15,6 +15,10 @@
     "soon": "준비중",
     "noArticles": "첫 글 준비 중"
   },
+  "stats": {
+    "today": "오늘 방문자",
+    "total": "누적 방문자"
+  },
   "footer": {
     "left": "Everything Korea — 프로토타입에서 실제 사이트로 이전 중",
     "right": "hreflang / sitemap / ads.txt는 배포 시 연결 예정"

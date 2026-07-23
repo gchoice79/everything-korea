@@ -1,0 +1,26 @@
+{
+  "brand": {
+    "name": "Everything Korea",
+    "tagline": "Segala Hal tentang Korea"
+  },
+  "home": {
+    "eyebrow": "Ensiklopedia Informasi Korea dalam Berbagai Bahasa",
+    "title": "Korea, dalam bahasa Anda.",
+    "desc": "Mulai dari kuliner hingga sejarah dan wisata — satu kisah Korea dalam 15 bahasa. Silakan baca sesuka hati dalam bahasa yang paling nyaman bagi Anda.",
+    "sectionLabel": "Kategori",
+    "allCategories": "Semua kategori"
+  },
+  "category": {
+    "live": "Buka",
+    "soon": "Sedang dipersiapkan",
+    "noArticles": "Sedang mempersiapkan postingan pertama"
+  },
+  "footer": {
+    "left": "Everything Korea — Sedang dalam proses pemindahan dari prototipe ke situs yang sebenarnya",
+    "right": "hreflang / sitemap / ads.txt akan ditautkan saat peluncuran"
+  },
+  "stats": {
+    "today": "Pengunjung hari ini",
+    "total": "Jumlah pengunjung kumulatif"
+  }
+}

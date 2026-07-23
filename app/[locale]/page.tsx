@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
 import { supabase } from '@/lib/supabase';
@@ -16,6 +16,17 @@ export default function Home() {
   const t = useTranslations();
   const locale = useLocale();
   const [categories, setCategories] = useState<CategoryCard[] | null>(null);
+  const [stats, setStats] = useState<{ today: number; total: number } | null>(null);
+  const trackedRef = useRef(false);
+
+  useEffect(() => {
+    if (trackedRef.current) return;
+    trackedRef.current = true;
+    fetch('/api/track-visit', { method: 'POST' })
+      .then((r) => r.json())
+      .then((d) => setStats({ today: d.today, total: d.total }))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +107,17 @@ export default function Home() {
           {t('home.title')}
         </h1>
         <p className="mt-5 max-w-md opacity-75">{t('home.desc')}</p>
+
+        {stats && (
+          <div className="mt-6 flex gap-5 text-xs font-mono opacity-60">
+            <span>
+              {t('stats.today')} {stats.today.toLocaleString()}
+            </span>
+            <span>
+              {t('stats.total')} {stats.total.toLocaleString()}
+            </span>
+          </div>
+        )}
       </section>
 
       <div className="my-9 h-[90px] border border-dashed border-ink/15 rounded flex items-center justify-center text-[10px] tracking-widest uppercase text-ink/40">

@@ -1,5 +1,8 @@
 {
-  "brand": { "name": "Everything Korea", "tagline": "韓国のすべて" },
+  "brand": {
+    "name": "Everything Korea",
+    "tagline": "韓国のすべて"
+  },
   "home": {
     "eyebrow": "多言語韓国百科事典",
     "title": "韓国を、あなたの言語で。",
@@ -7,9 +10,17 @@
     "sectionLabel": "カテゴリー",
     "allCategories": "すべてのカテゴリー"
   },
-  "category": { "live": "公開中", "soon": "準備中", "noArticles": "最初の記事を準備中" },
+  "category": {
+    "live": "公開中",
+    "soon": "準備中",
+    "noArticles": "最初の記事を準備中"
+  },
   "footer": {
     "left": "Everything Korea — プロトタイプから実サイトへ移行中",
     "right": "hreflang / sitemap / ads.txt は公開時に設定予定"
+  },
+  "stats": {
+    "today": "本日の訪問者",
+    "total": "累計訪問者数"
   }
 }

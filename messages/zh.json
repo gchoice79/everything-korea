@@ -1,5 +1,8 @@
 {
-  "brand": { "name": "Everything Korea", "tagline": "韩国的一切" },
+  "brand": {
+    "name": "Everything Korea",
+    "tagline": "韩国的一切"
+  },
   "home": {
     "eyebrow": "多语言韩国百科",
     "title": "用你的语言，读懂韩国。",
@@ -7,9 +10,17 @@
     "sectionLabel": "分类",
     "allCategories": "全部分类"
   },
-  "category": { "live": "已上线", "soon": "即将上线", "noArticles": "首批文章筹备中" },
+  "category": {
+    "live": "已上线",
+    "soon": "即将上线",
+    "noArticles": "首批文章筹备中"
+  },
   "footer": {
     "left": "Everything Korea — 正从原型迁移至正式站点",
     "right": "hreflang / sitemap / ads.txt 将于上线时配置"
+  },
+  "stats": {
+    "today": "今天的访客",
+    "total": "累计访问量"
   }
 }

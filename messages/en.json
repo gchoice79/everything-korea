@@ -18,5 +18,9 @@
   "footer": {
     "left": "Everything Korea — migrating from prototype to live site",
     "right": "hreflang / sitemap / ads.txt to be wired at deploy"
+  },
+  "stats": {
+    "today": "Today's Visitors",
+    "total": "Total Visitors"
   }
 }

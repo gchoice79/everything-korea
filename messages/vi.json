@@ -1,0 +1,26 @@
+{
+  "brand": {
+    "name": "Everything Korea",
+    "tagline": "Mọi thứ về Hàn Quốc"
+  },
+  "home": {
+    "eyebrow": "Bách khoa toàn thư đa ngôn ngữ về Hàn Quốc",
+    "title": "Hàn Quốc, bằng ngôn ngữ của bạn.",
+    "desc": "Từ ẩm thực đến lịch sử, du lịch — một câu chuyện về Hàn Quốc được kể bằng 15 ngôn ngữ. Hãy thoải mái chuyển đổi và đọc bằng ngôn ngữ mà bạn cảm thấy thoải mái nhất.",
+    "sectionLabel": "Thể loại",
+    "allCategories": "Tất cả các danh mục"
+  },
+  "category": {
+    "live": "Mở",
+    "soon": "Đang chuẩn bị",
+    "noArticles": "Đang chuẩn bị bài viết đầu tiên"
+  },
+  "footer": {
+    "left": "Everything Korea — Đang chuyển từ phiên bản thử nghiệm sang trang web chính thức",
+    "right": "hreflang / sitemap / ads.txt sẽ được liên kết khi triển khai"
+  },
+  "stats": {
+    "today": "Số lượng khách truy cập hôm nay",
+    "total": "Tổng số lượt truy cập"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "brand": {
+    "name": "Everything Korea",
+    "tagline": "Tudo sobre a Coreia"
+  },
+  "home": {
+    "eyebrow": "Enciclopédia multilíngue sobre a Coreia",
+    "title": "A Coreia, no seu idioma.",
+    "desc": "Da culinária à história, passando pelas viagens — uma história da Coreia em 15 idiomas. Leia à vontade, alternando entre os idiomas que lhe forem mais convenientes.",
+    "sectionLabel": "Categoria",
+    "allCategories": "Todas as categorias"
+  },
+  "category": {
+    "live": "Abrir",
+    "soon": "Em preparação",
+    "noArticles": "Preparando o primeiro post"
+  },
+  "footer": {
+    "left": "Everything Korea — Em processo de migração do protótipo para o site definitivo",
+    "right": "hreflang / sitemap / ads.txt serão vinculados no momento da publicação"
+  },
+  "stats": {
+    "today": "Visitantes de hoje",
+    "total": "Número acumulado de visitantes"
+  }
+}

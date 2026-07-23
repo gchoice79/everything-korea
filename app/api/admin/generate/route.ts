@@ -30,6 +30,12 @@ const PRIORITY_LANGS = [
   { code: 'ja', deepl: 'ja' as const },
   { code: 'zh', deepl: 'zh' as const },
   { code: 'hi', deepl: 'hi' as const },
+  { code: 'es', deepl: 'es' as const },
+  { code: 'fr', deepl: 'fr' as const },
+  { code: 'ar', deepl: 'ar' as const },
+  { code: 'id', deepl: 'id' as const },
+  { code: 'vi', deepl: 'vi' as const },
+  { code: 'pt', deepl: 'pt-BR' as const },
 ];
 
 type Block = { h?: string; p?: string; img?: string };
