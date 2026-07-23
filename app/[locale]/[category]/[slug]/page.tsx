@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useLocale } from 'next-intl';
 import { supabase } from '@/lib/supabase';
 
-type Block = { h?: string; p?: string };
+type Block = { h?: string; p?: string; img?: string };
 
 const BACK_LABEL: Record<string, string> = {
   ko: '← 목록으로',
@@ -115,6 +115,13 @@ export default function ArticlePage() {
             <h4 key={i} className="font-serif text-lg mt-8 mb-1">
               {block.h}
             </h4>
+          ) : block.img ? (
+            <img
+              key={i}
+              src={block.img}
+              alt=""
+              className="w-full h-56 md:h-72 object-cover rounded-md my-6"
+            />
           ) : (
             <p key={i} className="opacity-90">
               {block.p}

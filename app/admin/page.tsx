@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
-type Block = { h?: string; p?: string };
+type Block = { h?: string; p?: string; img?: string };
 type Translation = { lang: string; title: string; excerpt: string; body: Block[] };
 type ArticleRow = {
   id: string;
@@ -117,6 +117,13 @@ export default function AdminDashboard() {
                       <h4 key={i} className="font-serif text-base mt-4 mb-1">
                         {block.h}
                       </h4>
+                    ) : block.img ? (
+                      <img
+                        key={i}
+                        src={block.img}
+                        alt=""
+                        className="w-full h-40 object-cover rounded my-3"
+                      />
                     ) : (
                       <p key={i} className="text-sm opacity-90 mb-2">
                         {block.p}
