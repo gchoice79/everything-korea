@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
 
@@ -20,6 +21,20 @@ const LANGS = [
 export default function Header() {
   const t = useTranslations();
   const locale = useLocale();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  const current = LANGS.find((l) => l.code === locale) ?? LANGS[0];
 
   return (
     <header className="sticky top-0 z-50 bg-paper border-b border-ink/10">
@@ -35,23 +50,32 @@ export default function Header() {
           {t('home.allCategories')} ▾
         </button>
 
-        <div className="flex gap-1.5 shrink min-w-0 overflow-x-auto">
-          {LANGS.map((l) => (
-            <Link
-              key={l.code}
-              href={`/${l.code}`}
-              className={`text-[11px] font-mono px-2.5 py-1.5 rounded-full border transition shrink-0 ${
-                l.code === locale
-                  ? 'bg-ink text-paper border-ink'
-                  : 'border-ink/10 opacity-55 hover:opacity-100'
-              }`}
-            >
-              {l.label}
-            </Link>
-          ))}
-          <span className="hidden sm:inline text-[11px] font-mono opacity-40 px-1 self-center shrink-0">
-            +4
-          </span>
+        <div ref={wrapRef} className="relative shrink-0">
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="text-[11px] font-mono px-3 py-1.5 rounded-full border border-ink/10 hover:opacity-100 opacity-80 transition"
+          >
+            {current.label} ▾
+          </button>
+
+          {open && (
+            <div className="absolute right-0 mt-2 w-40 max-h-72 overflow-y-auto bg-paper border border-ink/10 rounded-md shadow-lg py-1.5 z-50">
+              {LANGS.map((l) => (
+                <Link
+                  key={l.code}
+                  href={`/${l.code}`}
+                  onClick={() => setOpen(false)}
+                  className={`block text-[12px] font-mono px-3 py-1.5 transition ${
+                    l.code === locale
+                      ? 'bg-ink text-paper'
+                      : 'opacity-70 hover:opacity-100 hover:bg-ink/5'
+                  }`}
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </header>
