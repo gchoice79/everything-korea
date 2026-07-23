@@ -1,0 +1,22 @@
+{
+  "brand": {
+    "name": "Everything Korea",
+    "tagline": "Everything about Korea"
+  },
+  "home": {
+    "eyebrow": "MULTILINGUAL KOREA ENCYCLOPEDIA",
+    "title": "Korea, in Your Language.",
+    "desc": "From food to history to travel — Korean content researched by AI, checked by humans, in 15 languages.",
+    "sectionLabel": "CATEGORIES",
+    "allCategories": "All Categories"
+  },
+  "category": {
+    "live": "Live",
+    "soon": "Coming soon",
+    "noArticles": "First articles coming soon"
+  },
+  "footer": {
+    "left": "Everything Korea — migrating from prototype to live site",
+    "right": "hreflang / sitemap / ads.txt to be wired at deploy"
+  }
+}

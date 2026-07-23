@@ -1,0 +1,22 @@
+{
+  "brand": {
+    "name": "Everything Korea",
+    "tagline": "한국의 모든 것"
+  },
+  "home": {
+    "eyebrow": "다국어 한국 정보 백과",
+    "title": "한국을, 당신의 언어로.",
+    "desc": "음식부터 역사, 여행까지 — AI가 조사하고 사람이 검수한 한국 콘텐츠를 15개 언어로 만나보세요.",
+    "sectionLabel": "카테고리",
+    "allCategories": "전체 카테고리"
+  },
+  "category": {
+    "live": "오픈",
+    "soon": "준비중",
+    "noArticles": "첫 글 준비 중"
+  },
+  "footer": {
+    "left": "Everything Korea — 프로토타입에서 실제 사이트로 이전 중",
+    "right": "hreflang / sitemap / ads.txt는 배포 시 연결 예정"
+  }
+}
