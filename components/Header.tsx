@@ -17,24 +17,24 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 bg-paper border-b border-ink/10">
-      <div className="max-w-[1080px] mx-auto px-7 py-4 flex items-center justify-between gap-5">
+      <div className="max-w-[1080px] mx-auto px-4 sm:px-7 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3 sm:gap-5">
         <Link href={`/${locale}`} className="flex items-baseline gap-2.5 shrink-0">
           <span className="font-serif text-xl">{t('brand.name')}</span>
-          <span className="text-[10px] tracking-[.14em] uppercase text-gochujang">
+          <span className="hidden sm:inline text-[10px] tracking-[.14em] uppercase text-gochujang">
             {t('brand.tagline')}
           </span>
         </Link>
 
-        <button className="flex-1 max-w-[220px] mx-auto text-xs font-mono border border-ink/10 rounded-full px-4 py-2 text-center opacity-60">
+        <button className="order-3 w-full sm:order-none sm:w-auto sm:flex-1 sm:max-w-[220px] sm:mx-auto text-xs font-mono border border-ink/10 rounded-full px-4 py-2 text-center opacity-60 shrink-0">
           {t('home.allCategories')} ▾
         </button>
 
-        <div className="flex gap-1.5 shrink-0">
+        <div className="flex gap-1.5 shrink min-w-0 overflow-x-auto">
           {LANGS.map((l) => (
             <Link
               key={l.code}
               href={`/${l.code}`}
-              className={`text-[11px] font-mono px-2.5 py-1.5 rounded-full border transition ${
+              className={`text-[11px] font-mono px-2.5 py-1.5 rounded-full border transition shrink-0 ${
                 l.code === locale
                   ? 'bg-ink text-paper border-ink'
                   : 'border-ink/10 opacity-55 hover:opacity-100'
@@ -43,7 +43,9 @@ export default function Header() {
               {l.label}
             </Link>
           ))}
-          <span className="text-[11px] font-mono opacity-40 px-1 self-center">+10</span>
+          <span className="hidden sm:inline text-[11px] font-mono opacity-40 px-1 self-center shrink-0">
+            +10
+          </span>
         </div>
       </div>
     </header>
