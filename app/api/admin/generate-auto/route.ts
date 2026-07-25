@@ -27,7 +27,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: created.error ?? 'DB 저장 실패' }, { status: 500 });
   }
 
-  waitUntil(generateArticle({ articleId: created.articleId, topic: suggestion.topic, category }));
+  waitUntil(
+    generateArticle({ articleId: created.articleId, topic: suggestion.topic, slug: suggestion.slug, category })
+  );
 
   return NextResponse.json({ ok: true, articleId: created.articleId, topic: suggestion.topic });
 }

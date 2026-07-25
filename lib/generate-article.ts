@@ -173,10 +173,12 @@ export async function createGeneratingArticle({
 export async function generateArticle({
   articleId,
   topic,
+  slug,
   category,
 }: {
   articleId: string;
   topic: string;
+  slug: string;
   category: string;
 }): Promise<{ ok: boolean; title?: string; articleId?: string; error?: string }> {
   const sectionCount = 6;
@@ -266,7 +268,9 @@ export async function generateArticle({
       }
       resolvedBody.push(block);
     }
-    const heroImageUrl = await fetchImageUrl(`${topic} korea`);
+    // Unsplash는 한국어 검색어에서 결과가 0건인 경우가 많다(실측: "비빔밥
+    // korea" 0건, "bibimbap korea" 35건) — 항상 영문인 slug로 검색한다.
+    const heroImageUrl = await fetchImageUrl(`${slug.replace(/-/g, ' ')} korea`);
     imagesDone++;
     await notify({ phase: 'images', current: imagesDone, total: totalImages });
 

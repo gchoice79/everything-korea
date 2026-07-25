@@ -100,7 +100,7 @@ async function runTool(name: string, input: Record<string, unknown>) {
       const { topic, slug, category } = input as { topic: string; slug: string; category: string };
       const created = await createGeneratingArticle({ category, slug });
       if (!created.ok || !created.articleId) return created;
-      return await generateArticle({ articleId: created.articleId, topic, category });
+      return await generateArticle({ articleId: created.articleId, topic, slug, category });
     }
     case 'publish_article': {
       const { articleId } = input as { articleId: string };
