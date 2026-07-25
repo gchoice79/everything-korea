@@ -38,10 +38,12 @@ const FALLBACK_NOTE: Record<string, string> = {
 
 type Params = { locale: string; category: string; slug: string };
 
+const BASE_URL = 'https://everything-korea.vercel.app';
+
 const getArticle = cache(async (category: string, slug: string) => {
   const { data: article } = await supabaseAdmin
     .from('articles')
-    .select('id, image_url, views')
+    .select('id, image_url, views, created_at')
     .eq('category_id', category)
     .eq('slug', slug)
     .eq('status', 'published')
@@ -97,8 +99,24 @@ export default async function ArticlePage({ params }: { params: Params }) {
   const title = tr?.title ?? params.slug;
   const body = (tr?.body as Block[]) ?? [];
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: title,
+    description: tr?.excerpt,
+    image: data.article.image_url ? [data.article.image_url] : undefined,
+    datePublished: data.article.created_at,
+    inLanguage: params.locale,
+    mainEntityOfPage: `${BASE_URL}/${params.locale}/${params.category}/${params.slug}`,
+    publisher: { '@type': 'Organization', name: 'Everything Korea' },
+  };
+
   return (
     <main className="max-w-[720px] mx-auto px-7 py-14">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Link
         href={`/${params.locale}/${params.category}`}
         className="text-xs font-mono text-indigo inline-block mb-8"

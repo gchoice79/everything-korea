@@ -13,7 +13,8 @@
   "category": {
     "live": "오픈",
     "soon": "준비중",
-    "noArticles": "첫 글 준비 중"
+    "noArticles": "첫 글 준비 중",
+    "metaDescription": "한국에 관한 기사 — ‘Everything Korea’에서, 여러분의 언어로."
   },
   "stats": {
     "today": "오늘 방문자",

@@ -13,7 +13,8 @@
   "category": {
     "live": "Live",
     "soon": "Coming soon",
-    "noArticles": "First articles coming soon"
+    "noArticles": "First articles coming soon",
+    "metaDescription": "articles about Korea — from Everything Korea, in your language."
   },
   "footer": {
     "left": "Everything Korea — migrating from prototype to live site",

@@ -13,7 +13,8 @@
   "category": {
     "live": "فتح",
     "soon": "قيد الإعداد",
-    "noArticles": "قيد الإعداد: أول مشاركة"
+    "noArticles": "قيد الإعداد: أول مشاركة",
+    "metaDescription": "مقالات عن كوريا — من موقع \"Everything Korea\"، بلغتك."
   },
   "footer": {
     "left": "Everything Korea — قيد الانتقال من النموذج الأولي إلى الموقع الفعلي",

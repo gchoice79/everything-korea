@@ -13,7 +13,8 @@
   "category": {
     "live": "已上线",
     "soon": "即将上线",
-    "noArticles": "首批文章筹备中"
+    "noArticles": "首批文章筹备中",
+    "metaDescription": "关于韩国的文章——来自\"Everything Korea\"，以您的语言呈现。"
   },
   "footer": {
     "left": "Everything Korea — 正从原型迁移至正式站点",

@@ -13,7 +13,8 @@
   "category": {
     "live": "Ouverture",
     "soon": "En cours de préparation",
-    "noArticles": "Je prépare mon premier article"
+    "noArticles": "Je prépare mon premier article",
+    "metaDescription": "articles sur la Corée — tirés du site Everything Korea, dans votre langue."
   },
   "footer": {
     "left": "Everything Korea — En cours de migration du prototype vers le site définitif",

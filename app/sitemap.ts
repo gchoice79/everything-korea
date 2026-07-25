@@ -4,6 +4,8 @@ import { locales } from '@/i18n/routing';
 
 const BASE_URL = 'https://everything-korea.vercel.app';
 
+export const dynamic = 'force-dynamic';
+
 function languageAlternates(path: string) {
   const languages: Record<string, string> = {};
   for (const l of locales) languages[l] = `${BASE_URL}/${l}${path}`;

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { generateArticle } from '@/lib/generate-article';
+import { logClaudeUsage } from '@/lib/ai-usage';
 
 function isAuthed() {
   return cookies().get('admin_session')?.value === process.env.ADMIN_PASSWORD;
@@ -130,6 +131,8 @@ export async function POST(req: NextRequest) {
         tools,
         messages: conversation,
       });
+
+      await logClaudeUsage('chat', res.usage, res.model);
 
       const toolUses = res.content.filter(
         (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'

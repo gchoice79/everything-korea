@@ -19,3 +19,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  if (!isAuthed()) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  const { error: translationsError } = await supabaseAdmin
+    .from('article_translations')
+    .delete()
+    .eq('article_id', params.id);
+  if (translationsError) {
+    return NextResponse.json({ error: translationsError.message }, { status: 500 });
+  }
+
+  const { error: articleError } = await supabaseAdmin
+    .from('articles')
+    .delete()
+    .eq('id', params.id);
+  if (articleError) {
+    return NextResponse.json({ error: articleError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

@@ -38,6 +38,11 @@ export default function AdminDashboard() {
     load();
   }
 
+  async function deleteArticle(id: string) {
+    await fetch(`/api/admin/articles/${id}`, { method: 'DELETE' });
+    load();
+  }
+
   async function regenerateImage(
     articleId: string,
     target: 'hero' | 'body',
@@ -73,6 +78,18 @@ export default function AdminDashboard() {
             className="text-xs font-mono border border-black/20 rounded-full px-4 py-2 hover:bg-black/5 transition"
           >
             환경변수 확인
+          </Link>
+          <Link
+            href="/admin/categories"
+            className="text-xs font-mono border border-black/20 rounded-full px-4 py-2 hover:bg-black/5 transition"
+          >
+            카테고리 관리
+          </Link>
+          <Link
+            href="/admin/usage"
+            className="text-xs font-mono border border-black/20 rounded-full px-4 py-2 hover:bg-black/5 transition"
+          >
+            AI 사용량
           </Link>
           <Link
             href="/admin/new"
@@ -125,6 +142,14 @@ export default function AdminDashboard() {
                   className="text-xs font-mono border border-black/20 rounded-full px-4 py-2 hover:bg-black hover:text-[#F1EDE1] transition shrink-0"
                 >
                   발행하기
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm('정말 삭제하시겠어요?')) deleteArticle(a.id);
+                  }}
+                  className="text-xs font-mono border border-red-300 text-red-700 rounded-full px-4 py-2 hover:bg-red-700 hover:text-white transition shrink-0"
+                >
+                  삭제
                 </button>
               </div>
 

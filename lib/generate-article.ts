@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import * as deepl from 'deepl-node';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { logClaudeUsage } from '@/lib/ai-usage';
 
 async function fetchImageUrl(query: string): Promise<string | null> {
   const key = process.env.UNSPLASH_ACCESS_KEY;
@@ -19,7 +20,7 @@ async function fetchImageUrl(query: string): Promise<string | null> {
   }
 }
 
-const PRIORITY_LANGS = [
+export const PRIORITY_LANGS = [
   { code: 'en', deepl: 'en-US' as const },
   { code: 'ja', deepl: 'ja' as const },
   { code: 'zh', deepl: 'zh' as const },
@@ -47,7 +48,7 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
   throw lastErr;
 }
 
-async function translateText(
+export async function translateText(
   text: string,
   translator: deepl.Translator,
   targetLang: deepl.TargetLanguageCode
@@ -56,7 +57,7 @@ async function translateText(
   return r.text;
 }
 
-async function translateBlock(
+export async function translateBlock(
   block: Block,
   translator: deepl.Translator,
   targetLang: deepl.TargetLanguageCode
@@ -121,6 +122,8 @@ export async function suggestTopic(
       ],
     });
 
+    await logClaudeUsage('suggest_topic', res.usage, res.model);
+
     const textBlock = res.content.find(
       (b): b is { type: 'text'; text: string } => b.type === 'text'
     );
@@ -184,6 +187,8 @@ export async function generateArticle({
         },
       ],
     });
+
+    await logClaudeUsage('generate_article', res.usage, res.model);
 
     const textBlock = res.content.find(
       (b): b is { type: 'text'; text: string } => b.type === 'text'

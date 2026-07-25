@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { supabase } from '@/lib/supabase';
 
@@ -24,6 +25,8 @@ const LANGS = [
 export default function Header() {
   const t = useTranslations();
   const locale = useLocale();
+  const pathname = usePathname();
+  const rest = pathname?.replace(new RegExp(`^/${locale}`), '') || '';
   const [open, setOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -132,7 +135,7 @@ export default function Header() {
               {LANGS.map((l) => (
                 <Link
                   key={l.code}
-                  href={`/${l.code}`}
+                  href={`/${l.code}${rest}`}
                   onClick={() => setOpen(false)}
                   className={`flex items-center gap-2 text-[12px] font-mono px-3 py-1.5 transition ${
                     l.code === locale

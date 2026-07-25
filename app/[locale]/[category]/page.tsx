@@ -43,12 +43,16 @@ async function loadCategory(locale: string, category: string) {
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { name } = await loadCategory(params.locale, params.category);
+  const messages = (await import(`../../../messages/${params.locale}.json`)).default;
+  const description = `${name} ${messages.category.metaDescription}`;
   const languages: Record<string, string> = {};
   for (const l of locales) languages[l] = `/${l}/${params.category}`;
 
   return {
     title: name,
+    description,
     alternates: { canonical: `/${params.locale}/${params.category}`, languages },
+    openGraph: { title: name, description, type: 'website' },
   };
 }
 

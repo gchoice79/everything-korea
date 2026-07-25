@@ -1,15 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+
+type CategoryRow = {
+  id: string;
+  category_names: { lang: string; name: string }[];
+};
 
 export default function NewArticle() {
   const [topic, setTopic] = useState('');
   const [slug, setSlug] = useState('');
-  const [category, setCategory] = useState('food');
+  const [category, setCategory] = useState('');
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [autoLoading, setAutoLoading] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    async function loadCategories() {
+      const res = await fetch('/api/admin/categories');
+      const data = await res.json();
+      const rows: CategoryRow[] = data.categories ?? [];
+      setCategories(rows);
+      if (rows.length) setCategory((prev) => prev || rows[0].id);
+    }
+    loadCategories();
+  }, []);
+
+  function koName(id: string): string {
+    return categories.find((c) => c.id === id)?.category_names.find((n) => n.lang === 'ko')?.name ?? id;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -99,8 +120,11 @@ export default function NewArticle() {
             onChange={(e) => setCategory(e.target.value)}
             className="w-full border border-black/15 rounded px-3 py-2 bg-[#F1EDE1]"
           >
-            <option value="food">한국 음식</option>
-            <option value="culture">전통문화</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {koName(c.id)}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -126,7 +150,7 @@ export default function NewArticle() {
       >
         {autoLoading
           ? '주제 자동 선택 후 작성 중… (30초 정도 걸릴 수 있어요)'
-          : `"${category === 'food' ? '한국 음식' : '전통문화'}" 카테고리에서 주제 자동 선택해서 생성하기`}
+          : `"${koName(category)}" 카테고리에서 주제 자동 선택해서 생성하기`}
       </button>
 
       {result && (

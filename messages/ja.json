@@ -13,7 +13,8 @@
   "category": {
     "live": "公開中",
     "soon": "準備中",
-    "noArticles": "最初の記事を準備中"
+    "noArticles": "最初の記事を準備中",
+    "metaDescription": "韓国に関する記事 — 「Everything Korea」より、あなたの言語で。"
   },
   "footer": {
     "left": "Everything Korea — プロトタイプから実サイトへ移行中",
