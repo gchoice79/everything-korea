@@ -277,34 +277,35 @@ export async function generateArticle({
       is_machine_translated: false,
     });
 
+    // 언어를 동시에 다 돌리면(10개 언어 x 블록마다 병렬 호출) DeepL이 "Too many
+    // requests"로 대부분 거절한다 — 실측: 160개 동시 요청 중 138개 실패.
+    // 언어는 하나씩 순서대로 처리하고, 한 언어 안에서는 병렬로 번역한다.
     let translatedCount = 0;
     await notify({ phase: 'translating', current: 0, total: PRIORITY_LANGS.length });
     const translator = new deepl.Translator(process.env.DEEPL_API_KEY!);
-    await Promise.all(
-      PRIORITY_LANGS.map(async ({ code, deepl: deeplCode }) => {
-        try {
-          const [title, excerpt, body] = await Promise.all([
-            translateText(draft.title, translator, deeplCode),
-            translateText(draft.excerpt, translator, deeplCode),
-            Promise.all(resolvedBody.map((b) => translateBlock(b, translator, deeplCode))),
-          ]);
+    for (const { code, deepl: deeplCode } of PRIORITY_LANGS) {
+      try {
+        const [title, excerpt, body] = await Promise.all([
+          translateText(draft.title, translator, deeplCode),
+          translateText(draft.excerpt, translator, deeplCode),
+          Promise.all(resolvedBody.map((b) => translateBlock(b, translator, deeplCode))),
+        ]);
 
-          await supabaseAdmin.from('article_translations').insert({
-            article_id: articleId,
-            lang: code,
-            title,
-            excerpt,
-            body,
-            is_machine_translated: true,
-          });
-        } catch {
-          // 이 언어는 건너뛴다 — 한국어 원고는 이미 저장되어 있으니 리뷰는 가능하다.
-        } finally {
-          translatedCount++;
-          await notify({ phase: 'translating', current: translatedCount, total: PRIORITY_LANGS.length });
-        }
-      })
-    );
+        await supabaseAdmin.from('article_translations').insert({
+          article_id: articleId,
+          lang: code,
+          title,
+          excerpt,
+          body,
+          is_machine_translated: true,
+        });
+      } catch {
+        // 이 언어는 건너뛴다 — 한국어 원고는 이미 저장되어 있으니 리뷰는 가능하다.
+      } finally {
+        translatedCount++;
+        await notify({ phase: 'translating', current: translatedCount, total: PRIORITY_LANGS.length });
+      }
+    }
 
     await supabaseAdmin
       .from('articles')
