@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { suggestTopic, createGeneratingArticle, startGeneration } from '@/lib/generate-article';
+import { waitUntil } from '@vercel/functions';
+import { suggestTopic, createGeneratingArticle, generateArticle } from '@/lib/generate-article';
 
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 function isAuthed() {
   return cookies().get('admin_session')?.value === process.env.ADMIN_PASSWORD;
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: created.error ?? 'DB 저장 실패' }, { status: 500 });
   }
 
-  startGeneration({ articleId: created.articleId, topic: suggestion.topic, category });
+  waitUntil(generateArticle({ articleId: created.articleId, topic: suggestion.topic, category }));
 
   return NextResponse.json({ ok: true, articleId: created.articleId, topic: suggestion.topic });
 }
