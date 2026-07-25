@@ -174,6 +174,11 @@ export async function generateArticle({
 }): Promise<{ ok: boolean; title?: string; articleId?: string; error?: string }> {
   const sectionCount = 6;
   const imageCount = 4;
+  const startedAt = Date.now();
+  // maxDuration(280초)에 걸려 하드킬당하면 status가 'generating'에 영원히
+  // 갇힌다 — 그게 이 전체 작업에서 가장 나쁜 결말이므로, 언어 몇 개를 못
+  // 채우더라도 이 시간 안에는 반드시 pending_review로 마무리한다.
+  const deadline = startedAt + 220_000;
 
   const notify = async (event: GenerateProgress) => {
     await supabaseAdmin
@@ -284,11 +289,12 @@ export async function generateArticle({
     await notify({ phase: 'translating', current: 0, total: PRIORITY_LANGS.length });
     const translator = new deepl.Translator(process.env.DEEPL_API_KEY!);
     for (const { code, deepl: deeplCode } of PRIORITY_LANGS) {
+      if (Date.now() > deadline) break; // 남은 언어는 건너뛰고 지금까지 된 것만으로 마무리한다.
       try {
         // DeepL이 가끔 한 언어에서만 계속 느리거나 막힐 때, 그 한 언어 때문에
         // 남은 예산을 전부 태우고 행이 영영 'generating'에 갇히는 걸 막는다.
         const timeout = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('language translation timed out')), 25000)
+          setTimeout(() => reject(new Error('language translation timed out')), 15000)
         );
         const [title, excerpt, body] = await Promise.race([
           Promise.all([
