@@ -47,6 +47,29 @@ function progressPercent(p: ProgressEvent | null): number {
   }
 }
 
+const STEP_ORDER = ['topic', 'writing', 'images', 'saving', 'translating'] as const;
+const STEP_LABELS: Record<(typeof STEP_ORDER)[number], string> = {
+  topic: '주제 선정',
+  writing: '본문 작성',
+  images: '이미지 검색',
+  saving: '저장',
+  translating: '번역',
+};
+
+function stepStatus(
+  stepKey: (typeof STEP_ORDER)[number],
+  p: ProgressEvent | null
+): 'done' | 'active' | 'pending' {
+  if (!p) return 'pending';
+  if (p.phase === 'done') return 'done';
+  const stepPos = STEP_ORDER.indexOf(stepKey);
+  const curPos = p.phase === 'topic-done' ? 0 : STEP_ORDER.indexOf(p.phase as (typeof STEP_ORDER)[number]);
+  if (curPos === -1) return 'pending';
+  if (stepPos < curPos) return 'done';
+  if (stepPos === curPos) return p.phase === 'topic-done' ? 'done' : 'active';
+  return 'pending';
+}
+
 function progressLabel(p: ProgressEvent | null): string {
   if (!p) return '';
   switch (p.phase) {
@@ -265,15 +288,54 @@ export default function NewArticle() {
           : `"${koName(category)}" 카테고리에서 주제 자동 선택해서 생성하기`}
       </button>
 
-      {(loading || autoLoading) && progress && (
-        <div className="mt-6">
-          <div className="h-2 rounded bg-black/10 overflow-hidden">
-            <div
-              className="h-full bg-black transition-all duration-300"
-              style={{ width: `${progressPercent(progress)}%` }}
-            />
+      {(loading || autoLoading) && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-6">
+          <div className="bg-[#F1EDE1] rounded-lg shadow-xl w-full max-w-sm p-6">
+            <h2 className="font-serif text-lg mb-1">글 생성 중…</h2>
+            <p className="text-xs opacity-50 mb-5">완료될 때까지 이 창을 닫지 마세요.</p>
+
+            <ul className="space-y-3 mb-5">
+              {STEP_ORDER.filter((key) => autoLoading || key !== 'topic').map((key) => {
+                const status = stepStatus(key, progress);
+                return (
+                  <li key={key} className="flex items-center gap-3 text-sm">
+                    <span
+                      className={`w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-xs ${
+                        status === 'done'
+                          ? 'bg-black text-[#F1EDE1]'
+                          : status === 'active'
+                            ? 'border-2 border-black animate-pulse'
+                            : 'border border-black/20 text-black/30'
+                      }`}
+                    >
+                      {status === 'done' ? '✓' : ''}
+                    </span>
+                    <span className={status === 'pending' ? 'opacity-40' : ''}>
+                      {STEP_LABELS[key]}
+                      {key === 'translating' &&
+                        status === 'active' &&
+                        progress?.total &&
+                        ` (${progress.current ?? 0}/${progress.total})`}
+                      {key === 'images' &&
+                        status === 'active' &&
+                        progress?.total &&
+                        ` (${progress.current ?? 0}/${progress.total})`}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="h-2 rounded bg-black/10 overflow-hidden">
+              <div
+                className="h-full bg-black transition-all duration-300"
+                style={{ width: `${progressPercent(progress)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs font-mono opacity-60">
+              {progress ? progressLabel(progress) : '준비 중…'}
+            </p>
           </div>
-          <p className="mt-2 text-xs font-mono opacity-60">{progressLabel(progress)}</p>
         </div>
       )}
 
