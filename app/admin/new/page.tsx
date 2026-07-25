@@ -22,7 +22,6 @@ type GenerateResult = {
   title?: string;
   topic?: string;
   articleId?: string;
-  failedLangs?: string[];
 };
 
 function progressPercent(p: ProgressEvent | null): number {

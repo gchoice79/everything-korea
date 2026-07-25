@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import * as deepl from 'deepl-node';
+import { waitUntil } from '@vercel/functions';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logClaudeUsage } from '@/lib/ai-usage';
 
@@ -193,7 +194,6 @@ export async function generateArticle({
 
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const translator = new deepl.Translator(process.env.DEEPL_API_KEY!);
 
     const { data: categoryNameRow } = await supabaseAdmin
       .from('category_names')
@@ -279,45 +279,22 @@ export async function generateArticle({
       is_machine_translated: false,
     });
 
-    const failedLangs: string[] = [];
-    let translatedCount = 0;
-    await notify({ phase: 'translating', current: 0, total: PRIORITY_LANGS.length });
-    await Promise.all(
-      PRIORITY_LANGS.map(async ({ code, deepl: deeplCode }) => {
-        try {
-          const [title, excerpt, body] = await Promise.all([
-            translateText(draft.title, translator, deeplCode),
-            translateText(draft.excerpt, translator, deeplCode),
-            Promise.all(resolvedBody.map((b) => translateBlock(b, translator, deeplCode))),
-          ]);
-
-          await supabaseAdmin.from('article_translations').insert({
-            article_id: articleId,
-            lang: code,
-            title,
-            excerpt,
-            body,
-            is_machine_translated: true,
-          });
-        } catch {
-          failedLangs.push(code);
-        } finally {
-          translatedCount++;
-          await notify({ phase: 'translating', current: translatedCount, total: PRIORITY_LANGS.length });
-        }
-      })
-    );
+    // 한국어 원고는 여기서 바로 검토 대기열에 올린다. 언어별 번역은 뒤이어
+    // 하나씩(체이닝된 별도 요청으로) 채워지므로, 이 시점 이후는 60초 제한과
+    // 무관하게 계속 진행된다.
     await supabaseAdmin
       .from('articles')
-      .update({ status: 'pending_review', progress_phase: 'done', progress_current: null, progress_total: null })
+      .update({
+        status: 'pending_review',
+        progress_phase: 'translating',
+        progress_current: 0,
+        progress_total: PRIORITY_LANGS.length,
+      })
       .eq('id', articleId);
 
-    return {
-      ok: true,
-      title: draft.title,
-      articleId,
-      ...(failedLangs.length ? { failedLangs } : {}),
-    };
+    await translateNextLang(articleId);
+
+    return { ok: true, title: draft.title, articleId };
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류';
     return await fail(message);
@@ -334,4 +311,69 @@ export async function generateArticle({
       );
     return { ok: false, error: message };
   }
+}
+
+// PRIORITY_LANGS[progress_current]가 다음에 번역할 언어. 언어 하나를 번역해
+// 저장한 뒤, 다음 언어는 이 함수를 다시 호출하는 별도 요청으로 넘긴다 —
+// 그래야 언어마다 새 60초 예산을 받아서 전체 번역이 함수 시간 제한에
+// 걸리지 않는다.
+export async function translateNextLang(articleId: string): Promise<{ ok: boolean; done?: boolean }> {
+  const { data: articleRow } = await supabaseAdmin
+    .from('articles')
+    .select('progress_current')
+    .eq('id', articleId)
+    .maybeSingle();
+  const index = articleRow?.progress_current ?? 0;
+
+  if (index >= PRIORITY_LANGS.length) return { ok: true, done: true };
+
+  const { data: koRow } = await supabaseAdmin
+    .from('article_translations')
+    .select('title, excerpt, body')
+    .eq('article_id', articleId)
+    .eq('lang', 'ko')
+    .maybeSingle();
+  if (!koRow) return { ok: false };
+
+  const { code, deepl: deeplCode } = PRIORITY_LANGS[index];
+  try {
+    const translator = new deepl.Translator(process.env.DEEPL_API_KEY!);
+    const [title, excerpt, body] = await Promise.all([
+      translateText(koRow.title, translator, deeplCode),
+      translateText(koRow.excerpt, translator, deeplCode),
+      Promise.all((koRow.body as Block[]).map((b) => translateBlock(b, translator, deeplCode))),
+    ]);
+    await supabaseAdmin.from('article_translations').insert({
+      article_id: articleId,
+      lang: code,
+      title,
+      excerpt,
+      body,
+      is_machine_translated: true,
+    });
+  } catch {
+    // 이 언어는 건너뛰고 다음 언어로 넘어간다 (재시도 루프에 갇히지 않도록).
+  }
+
+  const nextIndex = index + 1;
+  const done = nextIndex >= PRIORITY_LANGS.length;
+  await supabaseAdmin
+    .from('articles')
+    .update({ progress_current: nextIndex, progress_phase: done ? 'done' : 'translating' })
+    .eq('id', articleId);
+
+  if (!done) {
+    waitUntil(
+      fetch(`https://${process.env.VERCEL_URL}/api/admin/generate/translate-next`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': process.env.ADMIN_PASSWORD ?? '',
+        },
+        body: JSON.stringify({ articleId }),
+      }).catch(() => {})
+    );
+  }
+
+  return { ok: true, done };
 }
