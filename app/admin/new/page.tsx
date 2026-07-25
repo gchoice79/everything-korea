@@ -8,6 +8,109 @@ type CategoryRow = {
   category_names: { lang: string; name: string }[];
 };
 
+type ProgressEvent = {
+  phase: string;
+  current?: number;
+  total?: number;
+  topic?: string;
+};
+
+type GenerateResult = {
+  done?: true;
+  ok: boolean;
+  error?: string;
+  title?: string;
+  topic?: string;
+  articleId?: string;
+  failedLangs?: string[];
+};
+
+function progressPercent(p: ProgressEvent | null): number {
+  if (!p) return 0;
+  switch (p.phase) {
+    case 'topic':
+      return 5;
+    case 'topic-done':
+      return 10;
+    case 'writing':
+      return 20;
+    case 'images':
+      return 25 + (p.total ? (p.current ?? 0) / p.total : 0) * 15;
+    case 'saving':
+      return 45;
+    case 'translating':
+      return 50 + (p.total ? (p.current ?? 0) / p.total : 0) * 45;
+    case 'done':
+      return 100;
+    default:
+      return 0;
+  }
+}
+
+function progressLabel(p: ProgressEvent | null): string {
+  if (!p) return '';
+  switch (p.phase) {
+    case 'topic':
+      return '주제 선정 중…';
+    case 'topic-done':
+      return `주제 선정 완료: "${p.topic}"`;
+    case 'writing':
+      return '본문 작성 중…';
+    case 'images':
+      return `이미지 검색 중… (${p.current ?? 0}/${p.total ?? 0})`;
+    case 'saving':
+      return '임시 저장 중…';
+    case 'translating':
+      return `번역 중… (${p.current ?? 0}/${p.total ?? 0}개 언어)`;
+    case 'done':
+      return '완료!';
+    default:
+      return '처리 중…';
+  }
+}
+
+async function runGenerate(
+  url: string,
+  body: Record<string, string>,
+  onProgress: (p: ProgressEvent) => void
+): Promise<GenerateResult> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}));
+    return { ok: false, error: data.error ?? `요청 실패 (HTTP ${res.status})` };
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let final: GenerateResult | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      if (!line) continue;
+      const evt = JSON.parse(line);
+      if (evt.done) {
+        final = evt;
+      } else {
+        onProgress(evt);
+      }
+    }
+  }
+
+  return final ?? { ok: false, error: '서버 응답이 중간에 끊겼습니다. 다시 시도해주세요.' };
+}
+
 export default function NewArticle() {
   const [topic, setTopic] = useState('');
   const [slug, setSlug] = useState('');
@@ -15,6 +118,7 @@ export default function NewArticle() {
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [autoLoading, setAutoLoading] = useState(false);
+  const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   useEffect(() => {
@@ -36,43 +140,51 @@ export default function NewArticle() {
     e.preventDefault();
     setLoading(true);
     setResult(null);
+    setProgress(null);
 
-    const res = await fetch('/api/admin/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic, slug, category }),
-    });
-    const data = await res.json();
-
-    setLoading(false);
-    if (res.ok) {
-      setResult({ ok: true, message: `"${data.title}" 작성 완료 — 검토 대기열에 추가됐습니다.` });
-      setTopic('');
-      setSlug('');
-    } else {
-      setResult({ ok: false, message: data.error ?? '알 수 없는 오류가 발생했습니다.' });
+    try {
+      const data = await runGenerate('/api/admin/generate', { topic, slug, category }, setProgress);
+      if (data.ok) {
+        setResult({ ok: true, message: `"${data.title}" 작성 완료 — 검토 대기열에 추가됐습니다.` });
+        setTopic('');
+        setSlug('');
+      } else {
+        setResult({ ok: false, message: data.error ?? '알 수 없는 오류가 발생했습니다.' });
+      }
+    } catch (err) {
+      setResult({
+        ok: false,
+        message: err instanceof Error ? err.message : '네트워크 오류가 발생했습니다.',
+      });
+    } finally {
+      setLoading(false);
+      setProgress(null);
     }
   }
 
   async function handleAutoGenerate() {
     setAutoLoading(true);
     setResult(null);
+    setProgress(null);
 
-    const res = await fetch('/api/admin/generate-auto', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category }),
-    });
-    const data = await res.json();
-
-    setAutoLoading(false);
-    if (res.ok) {
+    try {
+      const data = await runGenerate('/api/admin/generate-auto', { category }, setProgress);
+      if (data.ok) {
+        setResult({
+          ok: true,
+          message: `주제 자동 선택: "${data.topic}" → "${data.title}" 작성 완료 — 검토 대기열에 추가됐습니다.`,
+        });
+      } else {
+        setResult({ ok: false, message: data.error ?? '알 수 없는 오류가 발생했습니다.' });
+      }
+    } catch (err) {
       setResult({
-        ok: true,
-        message: `주제 자동 선택: "${data.topic}" → "${data.title}" 작성 완료 — 검토 대기열에 추가됐습니다.`,
+        ok: false,
+        message: err instanceof Error ? err.message : '네트워크 오류가 발생했습니다.',
       });
-    } else {
-      setResult({ ok: false, message: data.error ?? '알 수 없는 오류가 발생했습니다.' });
+    } finally {
+      setAutoLoading(false);
+      setProgress(null);
     }
   }
 
@@ -152,6 +264,18 @@ export default function NewArticle() {
           ? '주제 자동 선택 후 작성 중… (30초 정도 걸릴 수 있어요)'
           : `"${koName(category)}" 카테고리에서 주제 자동 선택해서 생성하기`}
       </button>
+
+      {(loading || autoLoading) && progress && (
+        <div className="mt-6">
+          <div className="h-2 rounded bg-black/10 overflow-hidden">
+            <div
+              className="h-full bg-black transition-all duration-300"
+              style={{ width: `${progressPercent(progress)}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs font-mono opacity-60">{progressLabel(progress)}</p>
+        </div>
+      )}
 
       {result && (
         <div

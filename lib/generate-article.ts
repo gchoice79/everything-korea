@@ -138,14 +138,18 @@ export async function suggestTopic(
   }
 }
 
+export type GenerateProgress = { phase: string; current?: number; total?: number };
+
 export async function generateArticle({
   topic,
   slug,
   category,
+  onProgress,
 }: {
   topic: string;
   slug: string;
   category: string;
+  onProgress?: (event: GenerateProgress) => void;
 }): Promise<{
   ok: boolean;
   title?: string;
@@ -155,6 +159,7 @@ export async function generateArticle({
 }> {
   const sectionCount = 6;
   const imageCount = 4;
+  const notify = (event: GenerateProgress) => onProgress?.(event);
 
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -168,6 +173,7 @@ export async function generateArticle({
       .maybeSingle();
     const categoryName = categoryNameRow?.name ?? category;
 
+    notify({ phase: 'writing' });
     const res = await anthropic.messages.create({
       model: 'claude-sonnet-5',
       max_tokens: 8000,
@@ -204,17 +210,27 @@ export async function generateArticle({
       body: (Block & { imgQuery?: string })[];
     };
 
+    const imgBlockCount = draft.body.filter((b) => b.imgQuery).length;
+    const totalImages = imgBlockCount + 1;
+    let imagesDone = 0;
+    notify({ phase: 'images', current: imagesDone, total: totalImages });
+
     const resolvedBody: Block[] = [];
     for (const block of draft.body) {
       if (block.imgQuery) {
         const url = await fetchImageUrl(block.imgQuery);
+        imagesDone++;
+        notify({ phase: 'images', current: imagesDone, total: totalImages });
         if (url) resolvedBody.push({ img: url });
         continue;
       }
       resolvedBody.push(block);
     }
     const heroImageUrl = await fetchImageUrl(`${topic} korea`);
+    imagesDone++;
+    notify({ phase: 'images', current: imagesDone, total: totalImages });
 
+    notify({ phase: 'saving' });
     const { data: article, error } = await supabaseAdmin
       .from('articles')
       .insert({ category_id: category, slug, status: 'pending_review', image_url: heroImageUrl })
@@ -235,26 +251,34 @@ export async function generateArticle({
     });
 
     const failedLangs: string[] = [];
-    for (const { code, deepl: deeplCode } of PRIORITY_LANGS) {
-      try {
-        const title = await translateText(draft.title, translator, deeplCode);
-        const excerpt = await translateText(draft.excerpt, translator, deeplCode);
-        const body = await Promise.all(
-          resolvedBody.map((b) => translateBlock(b, translator, deeplCode))
-        );
+    let translatedCount = 0;
+    notify({ phase: 'translating', current: 0, total: PRIORITY_LANGS.length });
+    await Promise.all(
+      PRIORITY_LANGS.map(async ({ code, deepl: deeplCode }) => {
+        try {
+          const [title, excerpt, body] = await Promise.all([
+            translateText(draft.title, translator, deeplCode),
+            translateText(draft.excerpt, translator, deeplCode),
+            Promise.all(resolvedBody.map((b) => translateBlock(b, translator, deeplCode))),
+          ]);
 
-        await supabaseAdmin.from('article_translations').insert({
-          article_id: article.id,
-          lang: code,
-          title,
-          excerpt,
-          body,
-          is_machine_translated: true,
-        });
-      } catch {
-        failedLangs.push(code);
-      }
-    }
+          await supabaseAdmin.from('article_translations').insert({
+            article_id: article.id,
+            lang: code,
+            title,
+            excerpt,
+            body,
+            is_machine_translated: true,
+          });
+        } catch {
+          failedLangs.push(code);
+        } finally {
+          translatedCount++;
+          notify({ phase: 'translating', current: translatedCount, total: PRIORITY_LANGS.length });
+        }
+      })
+    );
+    notify({ phase: 'done' });
 
     return {
       ok: true,
