@@ -285,10 +285,18 @@ export async function generateArticle({
     const translator = new deepl.Translator(process.env.DEEPL_API_KEY!);
     for (const { code, deepl: deeplCode } of PRIORITY_LANGS) {
       try {
-        const [title, excerpt, body] = await Promise.all([
-          translateText(draft.title, translator, deeplCode),
-          translateText(draft.excerpt, translator, deeplCode),
-          Promise.all(resolvedBody.map((b) => translateBlock(b, translator, deeplCode))),
+        // DeepL이 가끔 한 언어에서만 계속 느리거나 막힐 때, 그 한 언어 때문에
+        // 남은 예산을 전부 태우고 행이 영영 'generating'에 갇히는 걸 막는다.
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('language translation timed out')), 25000)
+        );
+        const [title, excerpt, body] = await Promise.race([
+          Promise.all([
+            translateText(draft.title, translator, deeplCode),
+            translateText(draft.excerpt, translator, deeplCode),
+            Promise.all(resolvedBody.map((b) => translateBlock(b, translator, deeplCode))),
+          ]),
+          timeout,
         ]);
 
         await supabaseAdmin.from('article_translations').insert({

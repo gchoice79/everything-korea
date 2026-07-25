@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { waitUntil } from '@vercel/functions';
 import { createGeneratingArticle, generateArticle } from '@/lib/generate-article';
 
-export const maxDuration = 180;
+export const maxDuration = 280;
 
 function isAuthed() {
   return cookies().get('admin_session')?.value === process.env.ADMIN_PASSWORD;

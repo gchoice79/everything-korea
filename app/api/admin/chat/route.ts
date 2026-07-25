@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { createGeneratingArticle, generateArticle } from '@/lib/generate-article';
 import { logClaudeUsage } from '@/lib/ai-usage';
 
-export const maxDuration = 180;
+export const maxDuration = 280;
 
 function isAuthed() {
   return cookies().get('admin_session')?.value === process.env.ADMIN_PASSWORD;
