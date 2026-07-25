@@ -140,16 +140,33 @@ export async function suggestTopic(
 
 export type GenerateProgress = { phase: string; current?: number; total?: number };
 
+export async function createGeneratingArticle({
+  category,
+  slug,
+}: {
+  category: string;
+  slug: string;
+}): Promise<{ ok: boolean; articleId?: string; error?: string }> {
+  const { data: article, error } = await supabaseAdmin
+    .from('articles')
+    .insert({ category_id: category, slug, status: 'generating', progress_phase: 'writing' })
+    .select()
+    .single();
+
+  if (error || !article) return { ok: false, error: error?.message ?? 'DB 저장 실패' };
+  return { ok: true, articleId: article.id };
+}
+
 export async function generateArticle({
+  articleId,
   topic,
   slug,
   category,
-  onProgress,
 }: {
+  articleId: string;
   topic: string;
   slug: string;
   category: string;
-  onProgress?: (event: GenerateProgress) => void;
 }): Promise<{
   ok: boolean;
   title?: string;
@@ -159,7 +176,20 @@ export async function generateArticle({
 }> {
   const sectionCount = 6;
   const imageCount = 4;
-  const notify = (event: GenerateProgress) => onProgress?.(event);
+  const notify = async (event: GenerateProgress) => {
+    await supabaseAdmin
+      .from('articles')
+      .update({
+        progress_phase: event.phase,
+        progress_current: event.current ?? null,
+        progress_total: event.total ?? null,
+      })
+      .eq('id', articleId)
+      .then(
+        () => {},
+        () => {}
+      );
+  };
 
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -173,7 +203,7 @@ export async function generateArticle({
       .maybeSingle();
     const categoryName = categoryNameRow?.name ?? category;
 
-    notify({ phase: 'writing' });
+    await notify({ phase: 'writing' });
     const res = await anthropic.messages.create({
       model: 'claude-sonnet-5',
       max_tokens: 8000,
@@ -200,7 +230,7 @@ export async function generateArticle({
       (b): b is { type: 'text'; text: string } => b.type === 'text'
     );
     if (!textBlock) {
-      return { ok: false, error: 'Claude 응답에서 텍스트를 찾지 못했습니다.' };
+      return await fail('Claude 응답에서 텍스트를 찾지 못했습니다.');
     }
     const raw = textBlock.text.trim();
     const cleaned = raw.replace(/^```json\s*|\s*```$/g, '');
@@ -213,14 +243,14 @@ export async function generateArticle({
     const imgBlockCount = draft.body.filter((b) => b.imgQuery).length;
     const totalImages = imgBlockCount + 1;
     let imagesDone = 0;
-    notify({ phase: 'images', current: imagesDone, total: totalImages });
+    await notify({ phase: 'images', current: imagesDone, total: totalImages });
 
     const resolvedBody: Block[] = [];
     for (const block of draft.body) {
       if (block.imgQuery) {
         const url = await fetchImageUrl(block.imgQuery);
         imagesDone++;
-        notify({ phase: 'images', current: imagesDone, total: totalImages });
+        await notify({ phase: 'images', current: imagesDone, total: totalImages });
         if (url) resolvedBody.push({ img: url });
         continue;
       }
@@ -228,21 +258,20 @@ export async function generateArticle({
     }
     const heroImageUrl = await fetchImageUrl(`${topic} korea`);
     imagesDone++;
-    notify({ phase: 'images', current: imagesDone, total: totalImages });
+    await notify({ phase: 'images', current: imagesDone, total: totalImages });
 
-    notify({ phase: 'saving' });
-    const { data: article, error } = await supabaseAdmin
+    await notify({ phase: 'saving' });
+    const { error: updateError } = await supabaseAdmin
       .from('articles')
-      .insert({ category_id: category, slug, status: 'pending_review', image_url: heroImageUrl })
-      .select()
-      .single();
+      .update({ image_url: heroImageUrl })
+      .eq('id', articleId);
 
-    if (error || !article) {
-      return { ok: false, error: error?.message ?? 'DB 저장 실패' };
+    if (updateError) {
+      return await fail(updateError.message);
     }
 
     await supabaseAdmin.from('article_translations').insert({
-      article_id: article.id,
+      article_id: articleId,
       lang: 'ko',
       title: draft.title,
       excerpt: draft.excerpt,
@@ -252,7 +281,7 @@ export async function generateArticle({
 
     const failedLangs: string[] = [];
     let translatedCount = 0;
-    notify({ phase: 'translating', current: 0, total: PRIORITY_LANGS.length });
+    await notify({ phase: 'translating', current: 0, total: PRIORITY_LANGS.length });
     await Promise.all(
       PRIORITY_LANGS.map(async ({ code, deepl: deeplCode }) => {
         try {
@@ -263,7 +292,7 @@ export async function generateArticle({
           ]);
 
           await supabaseAdmin.from('article_translations').insert({
-            article_id: article.id,
+            article_id: articleId,
             lang: code,
             title,
             excerpt,
@@ -274,20 +303,35 @@ export async function generateArticle({
           failedLangs.push(code);
         } finally {
           translatedCount++;
-          notify({ phase: 'translating', current: translatedCount, total: PRIORITY_LANGS.length });
+          await notify({ phase: 'translating', current: translatedCount, total: PRIORITY_LANGS.length });
         }
       })
     );
-    notify({ phase: 'done' });
+    await supabaseAdmin
+      .from('articles')
+      .update({ status: 'pending_review', progress_phase: 'done', progress_current: null, progress_total: null })
+      .eq('id', articleId);
 
     return {
       ok: true,
       title: draft.title,
-      articleId: article.id,
+      articleId,
       ...(failedLangs.length ? { failedLangs } : {}),
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류';
+    return await fail(message);
+  }
+
+  async function fail(message: string) {
+    await supabaseAdmin
+      .from('articles')
+      .update({ status: 'failed', error: message })
+      .eq('id', articleId)
+      .then(
+        () => {},
+        () => {}
+      );
     return { ok: false, error: message };
   }
 }

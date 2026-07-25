@@ -92,46 +92,43 @@ function progressLabel(p: ProgressEvent | null): string {
   }
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function runGenerate(
   url: string,
   body: Record<string, string>,
   onProgress: (p: ProgressEvent) => void
 ): Promise<GenerateResult> {
-  const res = await fetch(url, {
+  const startRes = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-
-  if (!res.ok || !res.body) {
-    const data = await res.json().catch(() => ({}));
-    return { ok: false, error: data.error ?? `요청 실패 (HTTP ${res.status})` };
+  const startData = await startRes.json().catch(() => ({}));
+  if (!startRes.ok || !startData.articleId) {
+    return { ok: false, error: startData.error ?? `요청 실패 (HTTP ${startRes.status})` };
   }
+  if (startData.topic) onProgress({ phase: 'topic-done', topic: startData.topic });
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let final: GenerateResult | null = null;
-
+  // 글 생성은 서버에서 백그라운드로 계속 진행되므로, 이 창을 닫아도 생성은 멈추지 않습니다.
   while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, idx).trim();
-      buffer = buffer.slice(idx + 1);
-      if (!line) continue;
-      const evt = JSON.parse(line);
-      if (evt.done) {
-        final = evt;
-      } else {
-        onProgress(evt);
-      }
-    }
-  }
+    await wait(2000);
+    const res = await fetch(`/api/admin/generate/status?id=${startData.articleId}`);
+    const data = await res.json().catch(() => ({}));
 
-  return final ?? { ok: false, error: '서버 응답이 중간에 끊겼습니다. 다시 시도해주세요.' };
+    if (!res.ok) {
+      return { ok: false, error: data.error ?? `상태 확인 실패 (HTTP ${res.status})` };
+    }
+    if (data.status === 'done') {
+      return { ok: true, title: data.title, articleId: startData.articleId };
+    }
+    if (data.status === 'failed') {
+      return { ok: false, error: data.error ?? '생성에 실패했습니다.' };
+    }
+    onProgress({ phase: data.phase, current: data.current, total: data.total });
+  }
 }
 
 export default function NewArticle() {
@@ -292,7 +289,9 @@ export default function NewArticle() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-6">
           <div className="bg-[#F1EDE1] rounded-lg shadow-xl w-full max-w-sm p-6">
             <h2 className="font-serif text-lg mb-1">글 생성 중…</h2>
-            <p className="text-xs opacity-50 mb-5">완료될 때까지 이 창을 닫지 마세요.</p>
+            <p className="text-xs opacity-50 mb-5">
+              이 창을 닫아도 서버에서 생성이 계속되고, 완료되면 검토 대기열에 올라옵니다.
+            </p>
 
             <ul className="space-y-3 mb-5">
               {STEP_ORDER.filter((key) => autoLoading || key !== 'topic').map((key) => {

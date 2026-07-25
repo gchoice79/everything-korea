@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { suggestTopic, generateArticle } from '@/lib/generate-article';
+import { waitUntil } from '@vercel/functions';
+import { suggestTopic, createGeneratingArticle, generateArticle } from '@/lib/generate-article';
 
 export const maxDuration = 60;
 
@@ -16,41 +17,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'category는 필수입니다' }, { status: 400 });
   }
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (data: object) => controller.enqueue(encoder.encode(JSON.stringify(data) + '\n'));
+  const suggestion = await suggestTopic(category);
+  if (!suggestion.ok || !suggestion.topic || !suggestion.slug) {
+    return NextResponse.json({ error: suggestion.error ?? '주제 추천 실패' }, { status: 500 });
+  }
 
-      try {
-        send({ phase: 'topic' });
-        const suggestion = await suggestTopic(category);
-        if (!suggestion.ok || !suggestion.topic || !suggestion.slug) {
-          send({ done: true, ok: false, error: suggestion.error ?? '주제 추천 실패' });
-          return;
-        }
-        send({ phase: 'topic-done', topic: suggestion.topic });
+  const created = await createGeneratingArticle({ category, slug: suggestion.slug });
+  if (!created.ok || !created.articleId) {
+    return NextResponse.json({ error: created.error ?? 'DB 저장 실패' }, { status: 500 });
+  }
 
-        const result = await generateArticle({
-          topic: suggestion.topic,
-          slug: suggestion.slug,
-          category,
-          onProgress: send,
-        });
+  waitUntil(
+    generateArticle({
+      articleId: created.articleId,
+      topic: suggestion.topic,
+      slug: suggestion.slug,
+      category,
+    })
+  );
 
-        if (!result.ok) {
-          send({ done: true, ok: false, error: result.error });
-        } else {
-          send({ ...result, done: true, topic: suggestion.topic, slug: suggestion.slug });
-        }
-      } catch (err) {
-        send({ done: true, ok: false, error: err instanceof Error ? err.message : '알 수 없는 오류' });
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new NextResponse(stream, {
-    headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8' },
-  });
+  return NextResponse.json({ ok: true, articleId: created.articleId, topic: suggestion.topic });
 }

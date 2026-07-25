@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { generateArticle } from '@/lib/generate-article';
+import { waitUntil } from '@vercel/functions';
+import { createGeneratingArticle, generateArticle } from '@/lib/generate-article';
 
 export const maxDuration = 60;
 
@@ -16,27 +17,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'topic, slug, category는 필수입니다' }, { status: 400 });
   }
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (data: object) => controller.enqueue(encoder.encode(JSON.stringify(data) + '\n'));
+  const created = await createGeneratingArticle({ category, slug });
+  if (!created.ok || !created.articleId) {
+    return NextResponse.json({ error: created.error ?? 'DB 저장 실패' }, { status: 500 });
+  }
 
-      try {
-        const result = await generateArticle({ topic, slug, category, onProgress: send });
-        if (!result.ok) {
-          send({ done: true, ok: false, error: result.error });
-        } else {
-          send({ ...result, done: true });
-        }
-      } catch (err) {
-        send({ done: true, ok: false, error: err instanceof Error ? err.message : '알 수 없는 오류' });
-      } finally {
-        controller.close();
-      }
-    },
-  });
+  waitUntil(generateArticle({ articleId: created.articleId, topic, slug, category }));
 
-  return new NextResponse(stream, {
-    headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8' },
-  });
+  return NextResponse.json({ ok: true, articleId: created.articleId });
 }
