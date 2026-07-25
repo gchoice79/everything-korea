@@ -19,6 +19,8 @@ async function searchImage(query: string, exclude: string[]): Promise<string | n
     );
     if (!res.ok) return null;
     const data = await res.json();
+    // 검색어에 맞는 사진이 거의 없으면 억지로 채우지 않고 건너뛴다.
+    if (!data.results?.length || data.total < 3) return null;
     const pick = data.results?.find((r: { urls: { regular: string } }) => !exclude.includes(r.urls.regular));
     return pick?.urls?.regular ?? data.results?.[0]?.urls?.regular ?? null;
   } catch {
@@ -46,12 +48,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { data: koTr } = await supabaseAdmin
     .from('article_translations')
-    .select('title, body')
+    .select('body')
     .eq('article_id', params.id)
     .eq('lang', 'ko')
     .single();
 
-  const query = koTr?.title ?? article.slug.replace(/-/g, ' ');
+  // Unsplash는 영어 검색어에서 훨씬 정확한 결과를 준다 — 한국어 제목 대신
+  // 항상 영문 slug를 쓰고 "korea"를 붙인다.
+  const query = `${article.slug.replace(/-/g, ' ')} korea`;
   const body = (koTr?.body as Block[]) ?? [];
   const usedImages = [article.image_url, ...body.map((b) => b.img)].filter(Boolean) as string[];
 

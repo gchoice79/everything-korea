@@ -9,12 +9,15 @@ async function fetchImageUrl(query: string): Promise<string | null> {
 
   try {
     const res = await fetch(
-      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`,
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape`,
       { headers: { Authorization: `Client-ID ${key}` } }
     );
     if (!res.ok) return null;
     const data = await res.json();
-    return data.results?.[0]?.urls?.regular ?? null;
+    // 검색어에 맞는 사진이 거의 없으면(엉뚱한 사진이 대신 걸릴 가능성이 큼)
+    // 억지로 채우지 않고 건너뛴다.
+    if (!data.results?.length || data.total < 3) return null;
+    return data.results[0]?.urls?.regular ?? null;
   } catch {
     return null;
   }
@@ -255,7 +258,7 @@ export async function generateArticle({
     const resolvedBody: Block[] = [];
     for (const block of draft.body) {
       if (block.imgQuery) {
-        const url = await fetchImageUrl(block.imgQuery);
+        const url = await fetchImageUrl(`${block.imgQuery} korea`);
         imagesDone++;
         await notify({ phase: 'images', current: imagesDone, total: totalImages });
         if (url) resolvedBody.push({ img: url });
