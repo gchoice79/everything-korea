@@ -121,7 +121,7 @@ async function runGenerate(
       return { ok: false, error: data.error ?? `상태 확인 실패 (HTTP ${res.status})` };
     }
     if (data.status === 'done') {
-      return { ok: true, title: data.title, articleId: startData.articleId };
+      return { ok: true, title: data.title, articleId: startData.articleId, topic: startData.topic };
     }
     if (data.status === 'failed') {
       return { ok: false, error: data.error ?? '생성에 실패했습니다.' };
