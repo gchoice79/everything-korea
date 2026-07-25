@@ -54,6 +54,10 @@ export async function translateText(
   targetLang: deepl.TargetLanguageCode
 ): Promise<string> {
   const r = await withRetry(() => translator.translateText(text, 'ko', targetLang));
+  // 여러 DeepL 요청을 동시에 쏘면 몇 번 성공하다가 한동안 전부 막혀버리는 걸
+  // 실측으로 확인했다(백필 스크립트에서 65개 중 62개 연쇄 timeout). 호출
+  // 사이에 짧은 간격을 둬서 항상 순차적으로만 나가도록 강제한다.
+  await new Promise((resolve) => setTimeout(resolve, 300));
   return r.text;
 }
 
@@ -294,16 +298,22 @@ export async function generateArticle({
         // DeepL이 가끔 한 언어에서만 계속 느리거나 막힐 때, 그 한 언어 때문에
         // 남은 예산을 전부 태우고 행이 영영 'generating'에 갇히는 걸 막는다.
         const timeout = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('language translation timed out')), 15000)
+          setTimeout(() => reject(new Error('language translation timed out')), 45000)
         );
-        const [title, excerpt, body] = await Promise.race([
-          Promise.all([
-            translateText(draft.title, translator, deeplCode),
-            translateText(draft.excerpt, translator, deeplCode),
-            Promise.all(resolvedBody.map((b) => translateBlock(b, translator, deeplCode))),
-          ]),
-          timeout,
-        ]);
+        // title/excerpt/블록을 전부 순차로 번역한다 — 동시에 쏘면(Promise.all)
+        // 몇 번 성공하다가 DeepL이 한동안 요청 전체를 막아버리는 걸 실측으로
+        // 확인했다(백필 스크립트: 65개 중 62개 연쇄 timeout, 순차 처리로는 69/69
+        // 전부 성공). translateText가 호출 사이에 자체적으로 300ms씩 쉰다.
+        const translateAll = async () => {
+          const title = await translateText(draft.title, translator, deeplCode);
+          const excerpt = await translateText(draft.excerpt, translator, deeplCode);
+          const body: Block[] = [];
+          for (const block of resolvedBody) {
+            body.push(await translateBlock(block, translator, deeplCode));
+          }
+          return [title, excerpt, body] as const;
+        };
+        const [title, excerpt, body] = await Promise.race([translateAll(), timeout]);
 
         await supabaseAdmin.from('article_translations').insert({
           article_id: articleId,
