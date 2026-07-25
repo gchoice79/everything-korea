@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { createGeneratingArticle, generateArticle } from '@/lib/generate-article';
+import { createGeneratingArticle, writeDraft, resolveImagesAndSave } from '@/lib/generate-article';
 import { logClaudeUsage } from '@/lib/ai-usage';
+
+export const maxDuration = 60;
 
 function isAuthed() {
   return cookies().get('admin_session')?.value === process.env.ADMIN_PASSWORD;
@@ -98,7 +100,9 @@ async function runTool(name: string, input: Record<string, unknown>) {
       const { topic, slug, category } = input as { topic: string; slug: string; category: string };
       const created = await createGeneratingArticle({ category, slug });
       if (!created.ok || !created.articleId) return created;
-      return await generateArticle({ articleId: created.articleId, topic, slug, category });
+      const written = await writeDraft({ articleId: created.articleId, topic, category });
+      if (!written.ok) return written;
+      return await resolveImagesAndSave(created.articleId);
     }
     case 'publish_article': {
       const { articleId } = input as { articleId: string };

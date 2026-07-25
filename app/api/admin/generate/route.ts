@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { waitUntil } from '@vercel/functions';
-import { createGeneratingArticle, generateArticle } from '@/lib/generate-article';
+import { createGeneratingArticle, startGeneration } from '@/lib/generate-article';
 
 export const maxDuration = 60;
 
@@ -22,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: created.error ?? 'DB 저장 실패' }, { status: 500 });
   }
 
-  waitUntil(generateArticle({ articleId: created.articleId, topic, slug, category }));
+  startGeneration({ articleId: created.articleId, topic, category });
 
   return NextResponse.json({ ok: true, articleId: created.articleId });
 }

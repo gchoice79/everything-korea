@@ -35,6 +35,7 @@ export const PRIORITY_LANGS = [
 ];
 
 type Block = { h?: string; p?: string; img?: string };
+type Draft = { title: string; excerpt: string; body: (Block & { imgQuery?: string })[]; topic: string };
 
 async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
   let lastErr: unknown;
@@ -73,6 +74,35 @@ function slugify(text: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+async function failArticle(articleId: string, message: string) {
+  await supabaseAdmin
+    .from('articles')
+    .update({ status: 'failed', error: message })
+    .eq('id', articleId)
+    .then(
+      () => {},
+      () => {}
+    );
+  return { ok: false, error: message };
+}
+
+// 각 단계는 별도의 요청(자기 자신을 호출하는 fetch)으로 다음 단계를 넘긴다.
+// Vercel 함수 시간 제한(60초)은 waitUntil로도 늘어나지 않고 호출 시작부터
+// 그대로 적용되기 때문에, 느린 작업(Claude 글쓰기, 이미지 검색, 번역)을
+// 전부 한 요청 안에 묶으면 결국 초과한다. 단계마다 새 요청 = 새 60초 예산.
+function chain(path: string, body: Record<string, unknown>) {
+  waitUntil(
+    fetch(`https://${process.env.VERCEL_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': process.env.ADMIN_PASSWORD ?? '',
+      },
+      body: JSON.stringify(body),
+    }).catch(() => {})
+  );
 }
 
 export async function suggestTopic(
@@ -139,8 +169,6 @@ export async function suggestTopic(
   }
 }
 
-export type GenerateProgress = { phase: string; current?: number; total?: number };
-
 export async function createGeneratingArticle({
   category,
   slug,
@@ -158,43 +186,33 @@ export async function createGeneratingArticle({
   return { ok: true, articleId: article.id };
 }
 
-export async function generateArticle({
+// 1단계: 시작. draft 저장 요청(2단계)으로 체이닝한다.
+export function startGeneration({
   articleId,
   topic,
-  slug,
   category,
 }: {
   articleId: string;
   topic: string;
-  slug: string;
   category: string;
-}): Promise<{
-  ok: boolean;
-  title?: string;
-  articleId?: string;
-  error?: string;
-  failedLangs?: string[];
-}> {
+}) {
+  chain('/api/admin/generate/write', { articleId, topic, category });
+}
+
+// 2단계: Claude로 본문을 쓰고 draft로 저장한 뒤, 이미지 단계(3단계)로 체이닝한다.
+export async function writeDraft({
+  articleId,
+  topic,
+  category,
+}: {
+  articleId: string;
+  topic: string;
+  category: string;
+}): Promise<{ ok: boolean; error?: string }> {
   const sectionCount = 6;
   const imageCount = 4;
-  const notify = async (event: GenerateProgress) => {
-    await supabaseAdmin
-      .from('articles')
-      .update({
-        progress_phase: event.phase,
-        progress_current: event.current ?? null,
-        progress_total: event.total ?? null,
-      })
-      .eq('id', articleId)
-      .then(
-        () => {},
-        () => {}
-      );
-  };
 
   try {
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
     const { data: categoryNameRow } = await supabaseAdmin
       .from('category_names')
       .select('name')
@@ -203,7 +221,7 @@ export async function generateArticle({
       .maybeSingle();
     const categoryName = categoryNameRow?.name ?? category;
 
-    await notify({ phase: 'writing' });
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const res = await anthropic.messages.create({
       model: 'claude-sonnet-5',
       max_tokens: 8000,
@@ -230,45 +248,67 @@ export async function generateArticle({
       (b): b is { type: 'text'; text: string } => b.type === 'text'
     );
     if (!textBlock) {
-      return await fail('Claude 응답에서 텍스트를 찾지 못했습니다.');
+      await failArticle(articleId, 'Claude 응답에서 텍스트를 찾지 못했습니다.');
+      return { ok: false };
     }
     const raw = textBlock.text.trim();
     const cleaned = raw.replace(/^```json\s*|\s*```$/g, '');
-    const draft = JSON.parse(cleaned) as {
+    const parsed = JSON.parse(cleaned) as {
       title: string;
       excerpt: string;
       body: (Block & { imgQuery?: string })[];
     };
+    const draft: Draft = { ...parsed, topic };
 
+    await supabaseAdmin
+      .from('articles')
+      .update({ draft, progress_phase: 'images' })
+      .eq('id', articleId);
+
+    chain('/api/admin/generate/resolve-images', { articleId });
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '알 수 없는 오류';
+    await failArticle(articleId, message);
+    return { ok: false };
+  }
+}
+
+// 3단계: draft의 이미지를 찾아 채우고, 한국어 원고를 저장해 검토 대기열에
+// 올린다. 언어별 번역(4단계~)은 여기서 하나만 트리거해두면 스스로 체이닝된다.
+export async function resolveImagesAndSave(articleId: string): Promise<{ ok: boolean; error?: string }> {
+  const { data: article } = await supabaseAdmin
+    .from('articles')
+    .select('draft')
+    .eq('id', articleId)
+    .maybeSingle();
+
+  const draft = article?.draft as Draft | null;
+  if (!draft) return await failArticle(articleId, 'draft를 찾을 수 없습니다');
+
+  try {
     const imgBlockCount = draft.body.filter((b) => b.imgQuery).length;
     const totalImages = imgBlockCount + 1;
     let imagesDone = 0;
-    await notify({ phase: 'images', current: imagesDone, total: totalImages });
+    await supabaseAdmin
+      .from('articles')
+      .update({ progress_current: imagesDone, progress_total: totalImages })
+      .eq('id', articleId);
 
     const resolvedBody: Block[] = [];
     for (const block of draft.body) {
       if (block.imgQuery) {
         const url = await fetchImageUrl(block.imgQuery);
         imagesDone++;
-        await notify({ phase: 'images', current: imagesDone, total: totalImages });
+        await supabaseAdmin.from('articles').update({ progress_current: imagesDone }).eq('id', articleId);
         if (url) resolvedBody.push({ img: url });
         continue;
       }
       resolvedBody.push(block);
     }
-    const heroImageUrl = await fetchImageUrl(`${topic} korea`);
-    imagesDone++;
-    await notify({ phase: 'images', current: imagesDone, total: totalImages });
+    const heroImageUrl = await fetchImageUrl(`${draft.topic} korea`);
 
-    await notify({ phase: 'saving' });
-    const { error: updateError } = await supabaseAdmin
-      .from('articles')
-      .update({ image_url: heroImageUrl })
-      .eq('id', articleId);
-
-    if (updateError) {
-      return await fail(updateError.message);
-    }
+    await supabaseAdmin.from('articles').update({ progress_phase: 'saving' }).eq('id', articleId);
 
     await supabaseAdmin.from('article_translations').insert({
       article_id: articleId,
@@ -281,11 +321,13 @@ export async function generateArticle({
 
     // 한국어 원고는 여기서 바로 검토 대기열에 올린다. 언어별 번역은 뒤이어
     // 하나씩(체이닝된 별도 요청으로) 채워지므로, 이 시점 이후는 60초 제한과
-    // 무관하게 계속 진행된다.
+        // 무관하게 계속 진행된다.
     await supabaseAdmin
       .from('articles')
       .update({
         status: 'pending_review',
+        image_url: heroImageUrl,
+        draft: null,
         progress_phase: 'translating',
         progress_current: 0,
         progress_total: PRIORITY_LANGS.length,
@@ -293,30 +335,16 @@ export async function generateArticle({
       .eq('id', articleId);
 
     await translateNextLang(articleId);
-
-    return { ok: true, title: draft.title, articleId };
+    return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류';
-    return await fail(message);
-  }
-
-  async function fail(message: string) {
-    await supabaseAdmin
-      .from('articles')
-      .update({ status: 'failed', error: message })
-      .eq('id', articleId)
-      .then(
-        () => {},
-        () => {}
-      );
-    return { ok: false, error: message };
+    return await failArticle(articleId, message);
   }
 }
 
-// PRIORITY_LANGS[progress_current]가 다음에 번역할 언어. 언어 하나를 번역해
-// 저장한 뒤, 다음 언어는 이 함수를 다시 호출하는 별도 요청으로 넘긴다 —
-// 그래야 언어마다 새 60초 예산을 받아서 전체 번역이 함수 시간 제한에
-// 걸리지 않는다.
+// 4단계 이후: PRIORITY_LANGS[progress_current]가 다음에 번역할 언어. 언어
+// 하나를 번역해 저장한 뒤, 다음 언어는 이 함수를 다시 호출하는 별도 요청으로
+// 넘긴다 — 그래야 언어마다 새 60초 예산을 받는다.
 export async function translateNextLang(articleId: string): Promise<{ ok: boolean; done?: boolean }> {
   const { data: articleRow } = await supabaseAdmin
     .from('articles')
@@ -362,18 +390,7 @@ export async function translateNextLang(articleId: string): Promise<{ ok: boolea
     .update({ progress_current: nextIndex, progress_phase: done ? 'done' : 'translating' })
     .eq('id', articleId);
 
-  if (!done) {
-    waitUntil(
-      fetch(`https://${process.env.VERCEL_URL}/api/admin/generate/translate-next`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-internal-secret': process.env.ADMIN_PASSWORD ?? '',
-        },
-        body: JSON.stringify({ articleId }),
-      }).catch(() => {})
-    );
-  }
+  if (!done) chain('/api/admin/generate/translate-next', { articleId });
 
   return { ok: true, done };
 }
