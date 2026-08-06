@@ -144,7 +144,9 @@ async function main() {
       }
       resolvedBody.push(block);
     }
-    const heroImageUrl = await fetchImageUrl(`${topic} korea`);
+    const slugQuery = slug.replace(/-/g, ' ');
+    const heroImageUrl =
+      (await fetchImageUrl(`${slugQuery} korea`)) ?? (await fetchImageUrl(slugQuery));
 
     await sb.from('articles').update({ image_url: heroImageUrl }).eq('id', article.id);
     await sb.from('article_translations').delete().eq('article_id', article.id);
