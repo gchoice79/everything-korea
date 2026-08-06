@@ -1,5 +1,13 @@
 import Script from 'next/script';
+import { Noto_Serif_KR } from 'next/font/google';
 import './globals.css';
+
+const notoSerifKR = Noto_Serif_KR({
+  subsets: ['latin'],
+  weight: ['500', '700'],
+  variable: '--font-serif-kr',
+  display: 'swap',
+});
 
 export default function RootLayout({
   children,
@@ -11,7 +19,7 @@ export default function RootLayout({
   const locale = params.locale ?? 'ko';
 
   return (
-    <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}>
+    <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} className={notoSerifKR.variable}>
       <head>
         <Script
           async

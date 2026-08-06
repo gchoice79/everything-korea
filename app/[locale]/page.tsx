@@ -7,6 +7,7 @@ type CategoryCard = {
   live: boolean;
   name: string;
   articles: string[];
+  heroImage: string | null;
 };
 
 type Params = { locale: string };
@@ -34,16 +35,19 @@ async function loadCategories(locale: string): Promise<CategoryCard[]> {
   const result: CategoryCard[] = [];
   for (const c of cats) {
     let articleTitles: string[] = [];
+    let heroImage: string | null = null;
     if (c.is_live) {
       const { data: articles } = await supabaseAdmin
         .from('articles')
-        .select('id')
+        .select('id, image_url')
         .eq('category_id', c.id)
         .eq('status', 'published')
         .order('views', { ascending: false })
         .limit(3);
 
       if (articles && articles.length) {
+        heroImage = articles.find((a) => a.image_url)?.image_url ?? null;
+
         const { data: translations } = await supabaseAdmin
           .from('article_translations')
           .select('article_id, lang, title')
@@ -58,7 +62,7 @@ async function loadCategories(locale: string): Promise<CategoryCard[]> {
       }
     }
 
-    result.push({ id: c.id, live: c.is_live, name: nameFor(c.id), articles: articleTitles });
+    result.push({ id: c.id, live: c.is_live, name: nameFor(c.id), articles: articleTitles, heroImage });
   }
 
   return result;
@@ -68,19 +72,52 @@ export default async function Home({ params }: { params: Params }) {
   const categories = await loadCategories(params.locale);
   const messages = (await import(`../../messages/${params.locale}.json`)).default;
 
+  const collageImages = categories
+    .map((c) => c.heroImage)
+    .filter((img): img is string => Boolean(img))
+    .slice(0, 3);
+
   return (
     <main className="max-w-[1080px] mx-auto px-7">
-      <section className="py-20 border-b border-ink/10">
-        <div className="flex items-center gap-2 text-xs tracking-[.16em] uppercase text-indigo mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-gochujang inline-block" />
-          {messages.home.eyebrow}
-        </div>
-        <h1 className="font-bold text-5xl md:text-6xl leading-tight max-w-2xl">
-          {messages.home.title}
-        </h1>
-        <p className="mt-5 max-w-md opacity-75">{messages.home.desc}</p>
+      <section className="py-20 border-b border-ink/10 grid grid-cols-1 md:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
+        <div>
+          <div className="flex items-center gap-2 text-xs tracking-[.16em] uppercase text-indigo mb-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-gochujang inline-block" />
+            {messages.home.eyebrow}
+          </div>
+          <h1 className="font-serif font-bold text-5xl md:text-6xl leading-tight max-w-2xl">
+            {messages.home.title}
+          </h1>
+          <p className="mt-5 max-w-lg leading-[1.85] opacity-75">{messages.home.desc}</p>
 
-        <VisitStats todayLabel={messages.stats.today} totalLabel={messages.stats.total} />
+          <VisitStats todayLabel={messages.stats.today} totalLabel={messages.stats.total} />
+        </div>
+
+        {collageImages.length > 0 && (
+          <div className="relative h-[260px] hidden md:block">
+            {collageImages[0] && (
+              <img
+                src={collageImages[0]}
+                alt=""
+                className="absolute top-0 left-[30px] w-[230px] h-[170px] object-cover rounded-lg border-4 border-paper shadow-sm -rotate-3"
+              />
+            )}
+            {collageImages[1] && (
+              <img
+                src={collageImages[1]}
+                alt=""
+                className="absolute top-[70px] right-[10px] w-[190px] h-[150px] object-cover rounded-lg border-4 border-paper shadow-sm rotate-3"
+              />
+            )}
+            {collageImages[2] && (
+              <img
+                src={collageImages[2]}
+                alt=""
+                className="absolute bottom-0 left-[75px] w-[180px] h-[130px] object-cover rounded-lg border-4 border-paper shadow-sm rotate-2"
+              />
+            )}
+          </div>
+        )}
       </section>
 
       <div className="my-9 h-[90px] border border-dashed border-ink/15 rounded flex items-center justify-center text-[10px] tracking-widest uppercase text-ink/40">
@@ -94,21 +131,33 @@ export default async function Home({ params }: { params: Params }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-16">
         {categories.map((c, i) => {
+          const headerStyle = c.heroImage
+            ? {
+                backgroundImage: `linear-gradient(rgba(241,237,225,0.86), rgba(241,237,225,0.93)), url('${c.heroImage}')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }
+            : undefined;
+
           const CardInner = (
             <>
-              <span className="text-[10px] font-mono opacity-50">
-                CAT {String(i + 1).padStart(2, '0')}
-              </span>
-              <span
-                className={`absolute top-6 right-6 text-[9px] uppercase tracking-wide px-2 py-0.5 rounded-full border ${
-                  c.live ? 'text-celadon border-celadon' : 'border-ink/10'
-                }`}
-              >
-                {c.live ? messages.category.live : messages.category.soon}
-              </span>
-              <h3 className="font-serif text-lg mt-4">{c.name}</h3>
+              <div className="px-6 pt-5 pb-4" style={headerStyle}>
+                <div className="flex items-start justify-between">
+                  <span className="text-[10px] font-mono opacity-50">
+                    CAT {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <span
+                    className={`text-[9px] uppercase tracking-wide px-2 py-0.5 rounded-full border ${
+                      c.live ? 'text-celadon border-celadon' : 'border-ink/10'
+                    }`}
+                  >
+                    {c.live ? messages.category.live : messages.category.soon}
+                  </span>
+                </div>
+                <h3 className="font-serif font-medium text-lg mt-2">{c.name}</h3>
+              </div>
               {c.articles.length ? (
-                <ul className="mt-3 pt-3 border-t border-ink/10 space-y-1.5">
+                <ul className="px-6 pb-6 pt-3 border-t border-ink/10 space-y-1.5">
                   {c.articles.map((title, idx) => (
                     <li key={idx} className="text-xs opacity-70 pl-4 relative">
                       <span className="absolute left-0 font-mono text-[10px] opacity-60">
@@ -119,14 +168,14 @@ export default async function Home({ params }: { params: Params }) {
                   ))}
                 </ul>
               ) : (
-                <div className="mt-3 pt-3 border-t border-ink/10 text-[11px] font-mono opacity-40">
+                <div className="px-6 pb-6 pt-3 border-t border-ink/10 text-[11px] font-mono opacity-40">
                   {messages.category.noArticles}
                 </div>
               )}
             </>
           );
 
-          const cardClass = `relative border border-ink/10 rounded-md p-6 transition ${
+          const cardClass = `block border border-ink/10 rounded-md overflow-hidden transition ${
             c.live
               ? 'cursor-pointer hover:border-gochujang hover:-translate-y-0.5'
               : 'opacity-40'

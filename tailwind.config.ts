@@ -15,6 +15,9 @@ const config: Config = {
         mustard: "#C79A2E",
         celadon: "#5C7B6E",
       },
+      fontFamily: {
+        serif: ["var(--font-serif-kr)", "ui-serif", "serif"],
+      },
     },
   },
   plugins: [],
