@@ -30,9 +30,7 @@ const PRIORITY_LANGS = [
 ];
 
 const TARGETS = [
-  { slug: 'bibimbap', topic: '비빔밥' },
-  { slug: 'kimchi', topic: '김치' },
-  { slug: 'bulgogi', topic: '불고기' },
+  { slug: 'kimchi-jjigae', topic: '김치찌개' },
 ];
 
 function wait(ms) {
