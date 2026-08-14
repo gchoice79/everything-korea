@@ -85,7 +85,7 @@ async function translateTextWithClaude(
       messages: [
         {
           role: 'user',
-          content: `다음 한국어 텍스트를 ${targetLangLabel}로 번역해줘. 의미와 어조를 그대로 유지하고, 다른 설명 없이 번역 결과만 출력해:\n\n${text}`,
+          content: `다음 한국어 텍스트를 ${targetLangLabel}로 번역해줘. 의미와 어조를 그대로 유지하고, 마크다운 서식(#, * 등) 없이 순수 텍스트로, 다른 설명 없이 번역 결과만 출력해:\n\n${text}`,
         },
       ],
     })
@@ -95,7 +95,8 @@ async function translateTextWithClaude(
     (b): b is { type: 'text'; text: string } => b.type === 'text'
   );
   if (!textBlock) throw new Error('Claude 번역 응답에서 텍스트를 찾지 못했습니다.');
-  return textBlock.text.trim();
+  // Claude가 가끔 제목/문단 앞에 마크다운 헤딩 기호(#)를 붙이는 경우가 있어 제거한다.
+  return textBlock.text.trim().replace(/^#{1,6}\s+/, '');
 }
 
 export async function translateText(
