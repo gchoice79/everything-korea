@@ -22,50 +22,58 @@ async function loadCategories(locale: string): Promise<CategoryCard[]> {
 
   if (!cats) return [];
 
-  const { data: names } = await supabaseAdmin
-    .from('category_names')
-    .select('category_id, lang, name')
-    .in('category_id', cats.map((c) => c.id));
+  const liveIds = cats.filter((c) => c.is_live).map((c) => c.id);
+
+  const [{ data: names }, { data: articles }] = await Promise.all([
+    supabaseAdmin
+      .from('category_names')
+      .select('category_id, lang, name')
+      .in('category_id', cats.map((c) => c.id)),
+    liveIds.length
+      ? supabaseAdmin
+          .from('articles')
+          .select('id, category_id, image_url')
+          .in('category_id', liveIds)
+          .eq('status', 'published')
+          .order('views', { ascending: false })
+      : Promise.resolve({ data: [] as { id: string; category_id: string; image_url: string | null }[] }),
+  ]);
 
   const nameFor = (categoryId: string) =>
     names?.find((n) => n.category_id === categoryId && n.lang === locale)?.name ??
     names?.find((n) => n.category_id === categoryId && n.lang === 'en')?.name ??
     categoryId;
 
-  const result: CategoryCard[] = [];
-  for (const c of cats) {
-    let articleTitles: string[] = [];
-    let heroImage: string | null = null;
-    if (c.is_live) {
-      const { data: articles } = await supabaseAdmin
-        .from('articles')
-        .select('id, image_url')
-        .eq('category_id', c.id)
-        .eq('status', 'published')
-        .order('views', { ascending: false })
-        .limit(3);
-
-      if (articles && articles.length) {
-        heroImage = articles.find((a) => a.image_url)?.image_url ?? null;
-
-        const { data: translations } = await supabaseAdmin
-          .from('article_translations')
-          .select('article_id, lang, title')
-          .in('article_id', articles.map((a) => a.id));
-
-        articleTitles = articles.map((a) => {
-          const t =
-            translations?.find((tr) => tr.article_id === a.id && tr.lang === locale) ??
-            translations?.find((tr) => tr.article_id === a.id && tr.lang === 'en');
-          return t?.title ?? '';
-        });
-      }
+  // 카테고리별 상위 3개(조회순, 이미 위 쿼리에서 정렬됨)만 추린다.
+  const topArticlesByCategory = new Map<string, { id: string; image_url: string | null }[]>();
+  for (const a of articles ?? []) {
+    const list = topArticlesByCategory.get(a.category_id) ?? [];
+    if (list.length < 3) {
+      list.push({ id: a.id, image_url: a.image_url });
+      topArticlesByCategory.set(a.category_id, list);
     }
-
-    result.push({ id: c.id, live: c.is_live, name: nameFor(c.id), articles: articleTitles, heroImage });
   }
 
-  return result;
+  const topArticleIds = [...topArticlesByCategory.values()].flat().map((a) => a.id);
+  const { data: translations } = topArticleIds.length
+    ? await supabaseAdmin
+        .from('article_translations')
+        .select('article_id, lang, title')
+        .in('article_id', topArticleIds)
+    : { data: [] as { article_id: string; lang: string; title: string }[] };
+
+  return cats.map((c) => {
+    const topArticles = topArticlesByCategory.get(c.id) ?? [];
+    const heroImage = topArticles.find((a) => a.image_url)?.image_url ?? null;
+    const articleTitles = topArticles.map((a) => {
+      const t =
+        translations?.find((tr) => tr.article_id === a.id && tr.lang === locale) ??
+        translations?.find((tr) => tr.article_id === a.id && tr.lang === 'en');
+      return t?.title ?? '';
+    });
+
+    return { id: c.id, live: c.is_live, name: nameFor(c.id), articles: articleTitles, heroImage };
+  });
 }
 
 export default async function Home({ params }: { params: Params }) {

@@ -18,6 +18,7 @@ export async function generateMetadata({
 
   const languages: Record<string, string> = {};
   for (const l of locales) languages[l] = `/${l}`;
+  languages['x-default'] = '/en';
 
   return {
     metadataBase: new URL(BASE_URL),

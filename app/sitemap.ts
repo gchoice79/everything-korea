@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic';
 function languageAlternates(path: string) {
   const languages: Record<string, string> = {};
   for (const l of locales) languages[l] = `${BASE_URL}/${l}${path}`;
+  languages['x-default'] = `${BASE_URL}/en${path}`;
   return languages;
 }
 

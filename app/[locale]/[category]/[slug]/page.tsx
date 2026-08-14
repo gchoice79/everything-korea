@@ -74,6 +74,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const { tr } = pickTranslation(data.translations, params.locale);
   const languages: Record<string, string> = {};
   for (const l of locales) languages[l] = `/${l}/${params.category}/${params.slug}`;
+  languages['x-default'] = `/en/${params.category}/${params.slug}`;
 
   return {
     title: tr?.title ?? params.slug,

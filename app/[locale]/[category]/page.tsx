@@ -6,22 +6,20 @@ import { locales } from '@/i18n/routing';
 type Params = { locale: string; category: string };
 
 async function loadCategory(locale: string, category: string) {
-  const { data: names } = await supabaseAdmin
-    .from('category_names')
-    .select('lang, name')
-    .eq('category_id', category);
+  const [{ data: names }, { data: arts }] = await Promise.all([
+    supabaseAdmin.from('category_names').select('lang, name').eq('category_id', category),
+    supabaseAdmin
+      .from('articles')
+      .select('id, slug')
+      .eq('category_id', category)
+      .eq('status', 'published')
+      .order('created_at', { ascending: false }),
+  ]);
 
   const name =
     names?.find((n) => n.lang === locale)?.name ??
     names?.find((n) => n.lang === 'en')?.name ??
     category;
-
-  const { data: arts } = await supabaseAdmin
-    .from('articles')
-    .select('id, slug')
-    .eq('category_id', category)
-    .eq('status', 'published')
-    .order('created_at', { ascending: false });
 
   let cards: { slug: string; title: string; excerpt: string }[] = [];
   if (arts && arts.length) {
@@ -47,6 +45,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const description = `${name} ${messages.category.metaDescription}`;
   const languages: Record<string, string> = {};
   for (const l of locales) languages[l] = `/${l}/${params.category}`;
+  languages['x-default'] = `/en/${params.category}`;
 
   return {
     title: name,
