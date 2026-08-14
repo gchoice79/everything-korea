@@ -24,7 +24,15 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ categories: data ?? [] });
+  const { data: articleRows } = await supabaseAdmin.from('articles').select('category_id');
+  const articleCounts: Record<string, number> = {};
+  for (const row of articleRows ?? []) {
+    articleCounts[row.category_id] = (articleCounts[row.category_id] ?? 0) + 1;
+  }
+
+  const categories = (data ?? []).map((c) => ({ ...c, articleCount: articleCounts[c.id] ?? 0 }));
+
+  return NextResponse.json({ categories });
 }
 
 export async function POST(req: NextRequest) {

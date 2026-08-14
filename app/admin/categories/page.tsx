@@ -8,6 +8,7 @@ type CategoryRow = {
   is_live: boolean;
   sort_order: number;
   category_names: { lang: string; name: string }[];
+  articleCount: number;
 };
 
 export default function AdminCategories() {
@@ -82,7 +83,7 @@ export default function AdminCategories() {
             >
               <div className="flex-1">
                 <span className="text-[10px] font-mono opacity-50 uppercase">
-                  {c.id} · order {c.sort_order}
+                  {c.id} · order {c.sort_order} · 글 {c.articleCount}개
                 </span>
                 <h3 className="font-serif text-lg">{ko?.name ?? c.id}</h3>
               </div>
