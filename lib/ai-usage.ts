@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export async function logClaudeUsage(
-  purpose: 'suggest_topic' | 'generate_article' | 'chat',
+  purpose: 'suggest_topic' | 'generate_article' | 'chat' | 'translate',
   usage: { input_tokens: number; output_tokens: number },
   model?: string
 ) {

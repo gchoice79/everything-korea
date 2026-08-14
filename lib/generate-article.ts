@@ -24,17 +24,39 @@ async function fetchImageUrl(query: string): Promise<string | null> {
 }
 
 export const PRIORITY_LANGS = [
-  { code: 'en', deepl: 'en-US' as const },
-  { code: 'ja', deepl: 'ja' as const },
-  { code: 'zh', deepl: 'zh' as const },
-  { code: 'hi', deepl: 'hi' as const },
-  { code: 'es', deepl: 'es' as const },
-  { code: 'fr', deepl: 'fr' as const },
-  { code: 'ar', deepl: 'ar' as const },
-  { code: 'id', deepl: 'id' as const },
-  { code: 'vi', deepl: 'vi' as const },
-  { code: 'pt', deepl: 'pt-BR' as const },
+  { code: 'en', deepl: 'en-US' as const, label: 'English' },
+  { code: 'ja', deepl: 'ja' as const, label: 'Japanese' },
+  { code: 'zh', deepl: 'zh' as const, label: 'Chinese (Simplified)' },
+  { code: 'hi', deepl: 'hi' as const, label: 'Hindi' },
+  { code: 'es', deepl: 'es' as const, label: 'Spanish' },
+  { code: 'fr', deepl: 'fr' as const, label: 'French' },
+  { code: 'ar', deepl: 'ar' as const, label: 'Arabic' },
+  { code: 'id', deepl: 'id' as const, label: 'Indonesian' },
+  { code: 'vi', deepl: 'vi' as const, label: 'Vietnamese' },
+  { code: 'pt', deepl: 'pt-BR' as const, label: 'Portuguese (Brazil)' },
 ];
+
+// DeepL 사용량이 이 비율 이상이면 이번 번역은 Claude로 돌린다.
+const DEEPL_USAGE_THRESHOLD = 0.9;
+
+export type TranslationEngine =
+  | { kind: 'deepl'; translator: deepl.Translator }
+  | { kind: 'claude'; anthropic: Anthropic };
+
+export async function pickTranslationEngine(
+  translator: deepl.Translator
+): Promise<'deepl' | 'claude'> {
+  try {
+    const usage = await translator.getUsage();
+    const used = usage.character?.count ?? 0;
+    const limit = usage.character?.limit ?? 0;
+    if (limit > 0 && used / limit >= DEEPL_USAGE_THRESHOLD) return 'claude';
+    return 'deepl';
+  } catch {
+    // 사용량 조회 자체가 실패하면(키 만료 등) 안전하게 Claude로 돌린다.
+    return 'claude';
+  }
+}
 
 type Block = { h?: string; p?: string; img?: string };
 
@@ -51,12 +73,41 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
   throw lastErr;
 }
 
+async function translateTextWithClaude(
+  text: string,
+  targetLangLabel: string,
+  anthropic: Anthropic
+): Promise<string> {
+  const res = await withRetry(() =>
+    anthropic.messages.create({
+      model: 'claude-sonnet-5',
+      max_tokens: 2000,
+      messages: [
+        {
+          role: 'user',
+          content: `다음 한국어 텍스트를 ${targetLangLabel}로 번역해줘. 의미와 어조를 그대로 유지하고, 다른 설명 없이 번역 결과만 출력해:\n\n${text}`,
+        },
+      ],
+    })
+  );
+  await logClaudeUsage('translate', res.usage, res.model);
+  const textBlock = res.content.find(
+    (b): b is { type: 'text'; text: string } => b.type === 'text'
+  );
+  if (!textBlock) throw new Error('Claude 번역 응답에서 텍스트를 찾지 못했습니다.');
+  return textBlock.text.trim();
+}
+
 export async function translateText(
   text: string,
-  translator: deepl.Translator,
-  targetLang: deepl.TargetLanguageCode
+  engine: TranslationEngine,
+  targetLang: deepl.TargetLanguageCode,
+  targetLangLabel: string
 ): Promise<string> {
-  const r = await withRetry(() => translator.translateText(text, 'ko', targetLang));
+  if (engine.kind === 'claude') {
+    return translateTextWithClaude(text, targetLangLabel, engine.anthropic);
+  }
+  const r = await withRetry(() => engine.translator.translateText(text, 'ko', targetLang));
   // 여러 DeepL 요청을 동시에 쏘면 몇 번 성공하다가 한동안 전부 막혀버리는 걸
   // 실측으로 확인했다(백필 스크립트에서 65개 중 62개 연쇄 timeout). 호출
   // 사이에 짧은 간격을 둬서 항상 순차적으로만 나가도록 강제한다.
@@ -66,11 +117,12 @@ export async function translateText(
 
 export async function translateBlock(
   block: Block,
-  translator: deepl.Translator,
-  targetLang: deepl.TargetLanguageCode
+  engine: TranslationEngine,
+  targetLang: deepl.TargetLanguageCode,
+  targetLangLabel: string
 ): Promise<Block> {
-  if (block.h) return { h: await translateText(block.h, translator, targetLang) };
-  if (block.p) return { p: await translateText(block.p, translator, targetLang) };
+  if (block.h) return { h: await translateText(block.h, engine, targetLang, targetLangLabel) };
+  if (block.p) return { p: await translateText(block.p, engine, targetLang, targetLangLabel) };
   return block;
 }
 
@@ -299,7 +351,11 @@ export async function generateArticle({
     let translatedCount = 0;
     await notify({ phase: 'translating', current: 0, total: PRIORITY_LANGS.length });
     const translator = new deepl.Translator(process.env.DEEPL_API_KEY!);
-    for (const { code, deepl: deeplCode } of PRIORITY_LANGS) {
+    // DeepL 크레딧이 90% 이상 소진된 상태면 이번 글의 번역은 전부 Claude로 돌린다.
+    const engineKind = await pickTranslationEngine(translator);
+    const engine: TranslationEngine =
+      engineKind === 'deepl' ? { kind: 'deepl', translator } : { kind: 'claude', anthropic };
+    for (const { code, deepl: deeplCode, label } of PRIORITY_LANGS) {
       if (Date.now() > deadline) break; // 남은 언어는 건너뛰고 지금까지 된 것만으로 마무리한다.
       try {
         // DeepL이 가끔 한 언어에서만 계속 느리거나 막힐 때, 그 한 언어 때문에
@@ -312,11 +368,11 @@ export async function generateArticle({
         // 확인했다(백필 스크립트: 65개 중 62개 연쇄 timeout, 순차 처리로는 69/69
         // 전부 성공). translateText가 호출 사이에 자체적으로 300ms씩 쉰다.
         const translateAll = async () => {
-          const title = await translateText(draft.title, translator, deeplCode);
-          const excerpt = await translateText(draft.excerpt, translator, deeplCode);
+          const title = await translateText(draft.title, engine, deeplCode, label);
+          const excerpt = await translateText(draft.excerpt, engine, deeplCode, label);
           const body: Block[] = [];
           for (const block of resolvedBody) {
-            body.push(await translateBlock(block, translator, deeplCode));
+            body.push(await translateBlock(block, engine, deeplCode, label));
           }
           return [title, excerpt, body] as const;
         };

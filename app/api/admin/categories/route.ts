@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import Anthropic from '@anthropic-ai/sdk';
 import * as deepl from 'deepl-node';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { PRIORITY_LANGS, translateText } from '@/lib/generate-article';
+import {
+  PRIORITY_LANGS,
+  translateText,
+  pickTranslationEngine,
+  TranslationEngine,
+} from '@/lib/generate-article';
 
 function isAuthed() {
   return cookies().get('admin_session')?.value === process.env.ADMIN_PASSWORD;
@@ -45,10 +51,15 @@ export async function POST(req: NextRequest) {
   await supabaseAdmin.from('category_names').insert({ category_id: id, lang: 'ko', name: koName });
 
   const translator = new deepl.Translator(process.env.DEEPL_API_KEY!);
+  const engineKind = await pickTranslationEngine(translator);
+  const engine: TranslationEngine =
+    engineKind === 'deepl'
+      ? { kind: 'deepl', translator }
+      : { kind: 'claude', anthropic: new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) };
   const failedLangs: string[] = [];
-  for (const { code, deepl: deeplCode } of PRIORITY_LANGS) {
+  for (const { code, deepl: deeplCode, label } of PRIORITY_LANGS) {
     try {
-      const name = await translateText(koName, translator, deeplCode);
+      const name = await translateText(koName, engine, deeplCode, label);
       await supabaseAdmin.from('category_names').insert({ category_id: id, lang: code, name });
     } catch {
       failedLangs.push(code);
