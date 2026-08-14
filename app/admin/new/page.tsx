@@ -6,6 +6,7 @@ import Link from 'next/link';
 type CategoryRow = {
   id: string;
   category_names: { lang: string; name: string }[];
+  articleCount: number;
 };
 
 type ProgressEvent = {
@@ -155,6 +156,10 @@ export default function NewArticle() {
     return categories.find((c) => c.id === id)?.category_names.find((n) => n.lang === 'ko')?.name ?? id;
   }
 
+  function articleCount(id: string): number {
+    return categories.find((c) => c.id === id)?.articleCount ?? 0;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -253,7 +258,7 @@ export default function NewArticle() {
           >
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
-                {koName(c.id)}
+                {koName(c.id)} (글 {c.articleCount}개)
               </option>
             ))}
           </select>
@@ -281,7 +286,7 @@ export default function NewArticle() {
       >
         {autoLoading
           ? '주제 자동 선택 후 작성 중… (30초 정도 걸릴 수 있어요)'
-          : `"${koName(category)}" 카테고리에서 주제 자동 선택해서 생성하기`}
+          : `"${koName(category)}" (글 ${articleCount(category)}개) 카테고리에서 주제 자동 선택해서 생성하기`}
       </button>
 
       {(loading || autoLoading) && (
